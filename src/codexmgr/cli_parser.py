@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_codex_parser(subparsers)
     _add_agentsmd_parser(subparsers)
     _add_skill_parser(subparsers)
+    _add_mcp_parser(subparsers)
     _add_init_template_parser(subparsers)
     subparsers.add_parser("doctor", help="Check project configuration health")
     subparsers.add_parser("status", help="Summarize project codexmgr state")
@@ -127,6 +128,77 @@ def _add_skill_parser(subparsers: argparse._SubParsersAction) -> None:
     disable.add_argument("skill", help="Skill name or path")
 
     skill_subparsers.add_parser("list", help="List available and configured skills")
+
+
+def _add_mcp_parser(subparsers: argparse._SubParsersAction) -> None:
+    """Add MCP user config management parsers.
+
+    Args:
+        subparsers: Top-level subparser action.
+
+    Returns:
+        None. The parser is mutated in place.
+    """
+    mcp = subparsers.add_parser("mcp", help="Manage existing user MCP servers")
+    mcp_subparsers = mcp.add_subparsers(dest="mcp_command", required=True)
+
+    mcp_subparsers.add_parser("list", help="List existing MCP servers")
+
+    show = mcp_subparsers.add_parser("show", help="Show one existing MCP server")
+    show.add_argument("server_id", help="Existing MCP server id")
+
+    enable = mcp_subparsers.add_parser("enable", help="Enable an existing MCP server")
+    enable.add_argument("server_id", help="Existing MCP server id")
+
+    disable = mcp_subparsers.add_parser("disable", help="Disable an existing MCP server")
+    disable.add_argument("server_id", help="Existing MCP server id")
+
+    token = mcp_subparsers.add_parser(
+        "set-token-env",
+        help="Set bearer_token_env_var on an existing MCP server",
+    )
+    token.add_argument("server_id", help="Existing MCP server id")
+    token.add_argument("env_var", help="Environment variable name")
+
+    add_env = mcp_subparsers.add_parser(
+        "add-env-var",
+        help="Forward an environment variable to an existing MCP server",
+    )
+    add_env.add_argument("server_id", help="Existing MCP server id")
+    add_env.add_argument("env_var", help="Environment variable name")
+
+    remove_env = mcp_subparsers.add_parser(
+        "remove-env-var",
+        help="Stop forwarding an environment variable by string entry",
+    )
+    remove_env.add_argument("server_id", help="Existing MCP server id")
+    remove_env.add_argument("env_var", help="Environment variable name")
+
+    set_header = mcp_subparsers.add_parser(
+        "set-env-header",
+        help="Map an HTTP header to an environment variable",
+    )
+    set_header.add_argument("server_id", help="Existing MCP server id")
+    set_header.add_argument("header", help="HTTP header name")
+    set_header.add_argument("env_var", help="Environment variable name")
+
+    unset_header = mcp_subparsers.add_parser(
+        "unset-env-header",
+        help="Remove an env_http_headers mapping",
+    )
+    unset_header.add_argument("server_id", help="Existing MCP server id")
+    unset_header.add_argument("header", help="HTTP header name")
+
+    set_field = mcp_subparsers.add_parser(
+        "set-field",
+        help="Set an allowlisted non-secret MCP field from a TOML value",
+    )
+    set_field.add_argument("server_id", help="Existing MCP server id")
+    set_field.add_argument("field", help="Allowlisted field name")
+    set_field.add_argument("value", help="TOML value literal")
+
+    validate = mcp_subparsers.add_parser("validate", help="Validate MCP config")
+    validate.add_argument("server_id", nargs="?", help="Optional MCP server id")
 
 
 def _add_init_template_parser(subparsers: argparse._SubParsersAction) -> None:

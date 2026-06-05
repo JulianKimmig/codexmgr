@@ -3,12 +3,15 @@
 `codexmgr` manages project-local Codex configuration from reusable templates.
 It keeps hand-written project instructions in `AGENTS.md` and generated Codex
 configuration in `.codex/` synchronized from a small declarative
-`.codex/codexmgr.toml` file.
+`.codex/codexmgr.toml` file. It can also toggle and lightly edit existing user
+MCP server entries in `$CODEX_HOME/config.toml`.
 
 The tool is intentionally narrow:
 
 - compose reusable AGENTS.md instruction fragments
 - enable or disable Codex skills per project
+- enable, disable, inspect, and update safe parameters on existing user MCP
+  servers
 - write reproducible lock data for the resolved project configuration
 - run `codex` with project `.codex/config.toml` values translated into `-c`
   overrides
@@ -158,6 +161,17 @@ codexmgr init-template agentsmd <name>
 codexmgr skill list
 codexmgr skill enable [--no-sync] <name-or-skill-path>
 codexmgr skill disable [--no-sync] <name-or-skill-path>
+codexmgr mcp list
+codexmgr mcp show <server-id>
+codexmgr mcp validate [server-id]
+codexmgr mcp enable <server-id>
+codexmgr mcp disable <server-id>
+codexmgr mcp set-token-env <server-id> <ENV_VAR>
+codexmgr mcp add-env-var <server-id> <ENV_VAR>
+codexmgr mcp remove-env-var <server-id> <ENV_VAR>
+codexmgr mcp set-env-header <server-id> <HEADER> <ENV_VAR>
+codexmgr mcp unset-env-header <server-id> <HEADER>
+codexmgr mcp set-field <server-id> <field> <toml-value>
 codexmgr codex <args...>
 ```
 
@@ -182,6 +196,60 @@ referenced snippets, enabled skills, and stale generated files.
 
 `status` prints the resolved homes, configured snippets and skills, and whether
 generated files are in sync.
+
+## User MCP Servers
+
+`codexmgr mcp ...` works on the user Codex config file:
+
+- `$CODEX_HOME/config.toml` when `CODEX_HOME` is set
+- `~/.codex/config.toml` when `CODEX_HOME` is unset
+
+These commands do not use `.codex/codexmgr.toml`, do not run `apply`, and do
+not require a project `.codex/` directory. They only operate on existing
+`[mcp_servers.<id>]` tables. Use `codex mcp add` or direct `config.toml` editing
+to create or remove MCP server definitions.
+
+List existing user MCP servers:
+
+```bash
+codexmgr mcp list
+codexmgr mcp show context7
+codexmgr mcp validate
+```
+
+Enable or disable an existing server without deleting its definition:
+
+```bash
+codexmgr mcp disable context7
+codexmgr mcp enable context7
+```
+
+Update token and environment references without storing literal token values:
+
+```bash
+codexmgr mcp set-token-env figma FIGMA_TOKEN
+codexmgr mcp add-env-var context7 CONTEXT7_TOKEN
+codexmgr mcp remove-env-var context7 CONTEXT7_TOKEN
+codexmgr mcp set-env-header figma Authorization FIGMA_AUTH_HEADER
+codexmgr mcp unset-env-header figma Authorization
+```
+
+Set a small allowlist of non-secret fields from TOML literals:
+
+```bash
+codexmgr mcp set-field context7 required true
+codexmgr mcp set-field context7 enabled_tools '["search", "open"]'
+codexmgr mcp set-field context7 default_tools_approval_mode '"prompt"'
+```
+
+Supported `set-field` names are `required`, `startup_timeout_sec`,
+`tool_timeout_sec`, `enabled_tools`, `disabled_tools`, and
+`default_tools_approval_mode`.
+
+`codexmgr mcp show` and `codexmgr mcp validate` never print raw `env` values or
+static `http_headers` values. Literal API token writes are intentionally not part
+of this command surface; prefer environment variable references such as
+`bearer_token_env_var`, `env_vars`, and `env_http_headers`.
 
 `agentsmd list` prints the named templates available under
 `$CODEXMGR_HOME/agentsmd` in sorted order.

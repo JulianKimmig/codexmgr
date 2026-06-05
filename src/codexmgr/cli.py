@@ -17,6 +17,7 @@ from .cli_parser import build_parser
 from .codex import run_codex
 from .errors import CommandError
 from .health import run_doctor, run_status
+from .mcp_cli import run_mcp_command
 from .navigation import run_codexmgr_home_action
 from .paths import global_codex_dir, global_codexmgr_dir
 from .project import apply_project_config, setup_project
@@ -195,6 +196,9 @@ def _dispatch(
             codexmgr_home,
             stdout,
         )
+
+    if args.command == "mcp":
+        return run_mcp_command(args, codex_home, stdout)
 
     if args.command == "doctor":
         return run_doctor(cwd, codex_home, codexmgr_home, stdout)
