@@ -35,7 +35,12 @@ def apply_project_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> No
     config = load_required_project_config(cwd)
     locked_agents_md = resolve_locked_agents_md(config, cwd, codexmgr_home)
     skill_entries = resolve_codex_skill_entries(config, cwd, codex_home)
-    codex_config = build_codex_skill_config(skill_entries, cwd)
+    skills_configured = "skills" in config
+    codex_config = build_codex_skill_config(
+        skill_entries,
+        cwd,
+        include_empty=skills_configured,
+    )
     lock_data = _lock_data(config, locked_agents_md, skill_entries)
 
     if lock_data:
@@ -64,6 +69,6 @@ def _lock_data(
     lock_data: dict[str, Any] = {}
     if "agents_md" in config:
         lock_data["agents_md"] = locked_agents_md
-    if skill_entries:
+    if "skills" in config:
         lock_data["skills"] = {"config": skill_entries}
     return lock_data
