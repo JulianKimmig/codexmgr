@@ -26,6 +26,7 @@ codexmgr = "codexmgr.cli:entrypoint"
 [project.optional-dependencies]
 dev = [
     "pytest>=9.0.3",
+    "pyyaml>=6.0.3",
 ]
 
 [build-system]
