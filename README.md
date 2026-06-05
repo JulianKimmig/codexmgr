@@ -160,7 +160,7 @@ codexmgr codex <args...>
 `[skills]` table is configured, and refreshes the generated `AGENTS.md` block
 when `[agents_md]` is configured.
 
-`cd` launches a shell in `$CODEXMGR_HOME`, similar to `chezmoi cd`. Use
+`cd` launches a shell in `$CODEXMGR_HOME`. Use
 `codexmgr cd --path` to print only the path, `codexmgr cd --explorer` to open
 the directory in a file explorer, and `codexmgr cd --terminal` to open a new
 terminal there.
