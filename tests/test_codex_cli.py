@@ -60,6 +60,70 @@ def test_build_codex_command_uses_no_config_overrides_when_missing(workspace):
     assert build_codex_command(project, ["--help"]) == ["codex", "--help"]
 
 
+def test_build_codex_command_merges_user_config_overrides(workspace):
+    """User -c values merge after project config before invoking codex."""
+    project, _ = workspace
+    (project / ".codex").mkdir()
+    (project / ".codex" / "config.toml").write_text(
+        '''
+model = "gpt-5"
+sandbox_permissions = ["disk-read"]
+
+[[skills.config]]
+path = "/abs/enabled/SKILL.md"
+enabled = true
+''',
+        encoding="utf-8",
+    )
+
+    command = build_codex_command(
+        project,
+        [
+            "-c",
+            'skills.config=[{name="imagegen", enabled=false}]',
+            "--config",
+            'sandbox_permissions=["network"]',
+            "--config=model=\"o3\"",
+            "exec",
+            "hello",
+        ],
+    )
+
+    assert command == [
+        "codex",
+        "-c",
+        'model="o3"',
+        "-c",
+        'sandbox_permissions=["disk-read", "network"]',
+        "-c",
+        'skills.config=[{path="/abs/enabled/SKILL.md", enabled=true}, '
+        '{name="imagegen", enabled=false}]',
+        "exec",
+        "hello",
+    ]
+
+
+def test_build_codex_command_merges_repeated_user_lists(workspace):
+    """Repeated user list overrides append into one final config value."""
+    project, _ = workspace
+
+    command = build_codex_command(
+        project,
+        [
+            "-c",
+            'skills.config=[{name="first", enabled=true}]',
+            "-c",
+            'skills.config=[{name="second", enabled=false}]',
+        ],
+    )
+
+    assert command == [
+        "codex",
+        "-c",
+        'skills.config=[{name="first", enabled=true}, {name="second", enabled=false}]',
+    ]
+
+
 def test_codex_subcommand_passes_args_and_return_code(workspace, monkeypatch):
     """codexmgr codex forwards all args to the external codex command."""
     project, codex_home = workspace

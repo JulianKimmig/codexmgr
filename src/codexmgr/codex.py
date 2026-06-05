@@ -1,6 +1,7 @@
 """Pass-through wrapper for the external codex command."""
 
 import subprocess
+import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,7 @@ from .toml_io import format_toml_value, load_optional_toml_file
 
 
 def run_codex(cwd: Path, codex_args: list[str]) -> int:
-    """Run the external codex command with project skill config prepended.
+    """Run the external codex command with project config prepended.
 
     Args:
         cwd: Project working directory for the external codex process.
@@ -37,15 +38,66 @@ def build_codex_command(cwd: Path, codex_args: list[str]) -> list[str]:
     Returns:
         The complete argv for the external codex process.
     """
-    return ["codex", *_config_overrides(cwd), *codex_args]
+    user_config, passthrough_args = _extract_config_args(codex_args)
+    return ["codex", *_config_overrides(cwd, user_config), *passthrough_args]
 
 
-def _config_overrides(cwd: Path) -> list[str]:
-    config = load_optional_toml_file(codex_config_path(cwd))
+def _config_overrides(cwd: Path, user_config: list[str]) -> list[str]:
+    config = _merged_config(cwd, user_config)
     overrides: list[str] = []
-    for key, value in _iter_overrides(config):
+    for key, value in config.items():
         overrides.extend(["-c", f"{key}={format_toml_value(value)}"])
     return overrides
+
+
+def _merged_config(cwd: Path, user_config: list[str]) -> dict[str, Any]:
+    merged = dict(_iter_overrides(load_optional_toml_file(codex_config_path(cwd))))
+    for raw_config in user_config:
+        key, value = _parse_config_override(raw_config)
+        _merge_config_value(merged, key, value)
+    return merged
+
+
+def _extract_config_args(codex_args: list[str]) -> tuple[list[str], list[str]]:
+    config_args: list[str] = []
+    passthrough_args: list[str] = []
+    index = 0
+    while index < len(codex_args):
+        arg = codex_args[index]
+        if arg in {"-c", "--config"}:
+            if index + 1 >= len(codex_args):
+                raise CommandError(f"{arg} requires a key=value argument")
+            config_args.append(codex_args[index + 1])
+            index += 2
+        elif arg.startswith("--config="):
+            config_args.append(arg.removeprefix("--config="))
+            index += 1
+        else:
+            passthrough_args.append(arg)
+            index += 1
+    return config_args, passthrough_args
+
+
+def _parse_config_override(raw_config: str) -> tuple[str, Any]:
+    key, separator, raw_value = raw_config.partition("=")
+    if not separator or not key:
+        raise CommandError(f"Invalid codex config override: {raw_config}")
+    return key, _parse_config_value(raw_value)
+
+
+def _parse_config_value(raw_value: str) -> Any:
+    try:
+        return tomllib.loads(f"value = {raw_value}")["value"]
+    except tomllib.TOMLDecodeError:
+        return raw_value
+
+
+def _merge_config_value(config: dict[str, Any], key: str, value: Any) -> None:
+    if isinstance(value, list):
+        existing = config.get(key)
+        config[key] = [*(existing if isinstance(existing, list) else []), *value]
+    else:
+        config[key] = value
 
 
 def _iter_overrides(
