@@ -5,13 +5,24 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
-from .agentsmd import add_agentsmd, list_agentsmd_options, remove_agentsmd
+from .agentsmd import (
+    add_agentsmd,
+    init_agentsmd_template,
+    list_agentsmd_options,
+    remove_agentsmd,
+    show_agentsmd,
+    validate_agentsmd,
+)
+from .cli_parser import build_parser
 from .codex import run_codex
 from .errors import CommandError
-from .navigation import add_cd_arguments, run_codexmgr_home_action
+from .health import run_doctor, run_status
+from .navigation import run_codexmgr_home_action
 from .paths import global_codex_dir, global_codexmgr_dir
 from .project import apply_project_config, setup_project
+from .skill_listing import skill_list_lines
 from .skills import disable_skill, enable_skill
+from .sync import check_project_sync
 
 
 def main(
@@ -74,67 +85,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     """
     if argv[:1] == ["codex"]:
         return argparse.Namespace(command="codex", codex_args=argv[1:])
-    return _build_parser().parse_args(argv)
-
-
-def _build_parser() -> argparse.ArgumentParser:
-    """Build the codexmgr argument parser.
-
-    Returns:
-        Configured top-level argparse parser.
-    """
-    parser = argparse.ArgumentParser(prog="codexmgr")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    subparsers.add_parser("setup", help="Create a project .codex directory")
-    subparsers.add_parser("apply", help="Apply the project Codex configuration")
-    cd = subparsers.add_parser("cd", help="Print shell navigation for CODEXMGR_HOME")
-    add_cd_arguments(cd)
-
-    codex = subparsers.add_parser("codex", add_help=False, help="Run codex with project config")
-    codex.add_argument("codex_args", nargs=argparse.REMAINDER)
-
-    agentsmd = subparsers.add_parser("agentsmd", help="Manage AGENTS.md fragments")
-    agentsmd_subparsers = agentsmd.add_subparsers(dest="agentsmd_command", required=True)
-
-    add = agentsmd_subparsers.add_parser("add", help="Add an AGENTS.md template")
-    _add_no_sync_argument(add)
-    add.add_argument("reference", help="Template name or TOML file path")
-
-    remove = agentsmd_subparsers.add_parser("remove", help="Remove an AGENTS.md template")
-    _add_no_sync_argument(remove)
-    remove.add_argument("source_id", help="Template source identifier")
-
-    agentsmd_subparsers.add_parser("list", help="List available AGENTS.md templates")
-
-    skill = subparsers.add_parser("skill", help="Manage project skill configuration")
-    skill_subparsers = skill.add_subparsers(dest="skill_command", required=True)
-
-    enable = skill_subparsers.add_parser("enable", help="Enable a skill")
-    _add_no_sync_argument(enable)
-    enable.add_argument("skill", help="Skill name or path")
-
-    disable = skill_subparsers.add_parser("disable", help="Disable a skill")
-    _add_no_sync_argument(disable)
-    disable.add_argument("skill", help="Skill name or path")
-
-    return parser
-
-
-def _add_no_sync_argument(parser: argparse.ArgumentParser) -> None:
-    """Add the shared sync opt-out flag to a mutating command.
-
-    Args:
-        parser: Subcommand parser that updates .codex/codexmgr.toml.
-
-    Returns:
-        None. The parser is mutated in place.
-    """
-    parser.add_argument(
-        "--no-sync",
-        action="store_true",
-        help="Do not run apply after updating codexmgr.toml",
-    )
+    return build_parser().parse_args(argv)
 
 
 def _dispatch(
@@ -162,6 +113,14 @@ def _dispatch(
         return 0
 
     if args.command == "apply":
+        if args.check or args.diff:
+            return check_project_sync(
+                cwd,
+                codex_home,
+                codexmgr_home,
+                stdout,
+                show_diff=args.diff,
+            )
         apply_project_config(cwd, codex_home, codexmgr_home)
         stdout.write("Applied project Codex configuration\n")
         return 0
@@ -176,6 +135,15 @@ def _dispatch(
         options = list_agentsmd_options(codexmgr_home)
         if options:
             stdout.write("\n".join(options) + "\n")
+        return 0
+
+    if args.command == "agentsmd" and args.agentsmd_command == "show":
+        stdout.write(show_agentsmd(args.reference, cwd, codexmgr_home))
+        return 0
+
+    if args.command == "agentsmd" and args.agentsmd_command == "validate":
+        source_id = validate_agentsmd(args.reference, cwd, codexmgr_home)
+        stdout.write(f"Valid {source_id}\n")
         return 0
 
     if args.command == "agentsmd" and args.agentsmd_command == "add":
@@ -200,6 +168,12 @@ def _dispatch(
             stdout,
         )
 
+    if args.command == "skill" and args.skill_command == "list":
+        lines = skill_list_lines(cwd, codex_home)
+        if lines:
+            stdout.write("\n".join(lines) + "\n")
+        return 0
+
     if args.command == "skill" and args.skill_command == "enable":
         skill = enable_skill(args.skill, cwd)
         return _finish_config_change(
@@ -221,6 +195,17 @@ def _dispatch(
             codexmgr_home,
             stdout,
         )
+
+    if args.command == "doctor":
+        return run_doctor(cwd, codex_home, codexmgr_home, stdout)
+
+    if args.command == "status":
+        return run_status(cwd, codex_home, codexmgr_home, stdout)
+
+    if args.command == "init-template" and args.init_template_command == "agentsmd":
+        path = init_agentsmd_template(args.name, codexmgr_home)
+        stdout.write(f"Created {path}\n")
+        return 0
 
     raise CommandError(f"Unsupported command: {args.command}")
 

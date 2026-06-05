@@ -144,10 +144,18 @@ keeps template mistakes visible during `apply`.
 ```bash
 codexmgr setup
 codexmgr apply
+codexmgr apply --check
+codexmgr apply --diff
 codexmgr cd [--path | --explorer | --terminal]
+codexmgr doctor
+codexmgr status
 codexmgr agentsmd list
+codexmgr agentsmd show <name-or-template-path>
+codexmgr agentsmd validate <name-or-template-path>
 codexmgr agentsmd add [--no-sync] <name-or-template-path>
 codexmgr agentsmd remove [--no-sync] <name-or-template-path>
+codexmgr init-template agentsmd <name>
+codexmgr skill list
 codexmgr skill enable [--no-sync] <name-or-skill-path>
 codexmgr skill disable [--no-sync] <name-or-skill-path>
 codexmgr codex <args...>
@@ -160,19 +168,39 @@ codexmgr codex <args...>
 `[skills]` table is configured, and refreshes the generated `AGENTS.md` block
 when `[agents_md]` is configured.
 
+`apply --check` exits with a failure if generated files are out of sync without
+writing them. `apply --diff` also avoids writing and prints unified diffs for
+the expected generated-file changes.
+
 `cd` launches a shell in `$CODEXMGR_HOME`. Use
 `codexmgr cd --path` to print only the path, `codexmgr cd --explorer` to open
 the directory in a file explorer, and `codexmgr cd --terminal` to open a new
 terminal there.
 
+`doctor` checks project setup, home environment variables, project TOML syntax,
+referenced snippets, enabled skills, and stale generated files.
+
+`status` prints the resolved homes, configured snippets and skills, and whether
+generated files are in sync.
+
 `agentsmd list` prints the named templates available under
 `$CODEXMGR_HOME/agentsmd` in sorted order.
+
+`agentsmd show` renders one template as AGENTS.md markdown without changing the
+project configuration. `agentsmd validate` loads and renders a template to catch
+TOML or template-shape errors before adding it.
 
 `agentsmd add` validates that the template exists before writing config.
 Repeated adds keep one source entry.
 
 `agentsmd remove` removes a configured template source and fails if the source
 is not present.
+
+`init-template agentsmd` creates a starter template under
+`$CODEXMGR_HOME/agentsmd` and refuses to overwrite an existing template.
+
+`skill list` prints available `$CODEX_HOME/skills/*/SKILL.md` entries and marks
+configured skills as enabled, disabled, or missing.
 
 `skill enable` and `skill disable` keep enabled and disabled lists mutually
 exclusive. Repeated commands keep one entry.
@@ -203,8 +231,8 @@ uv build
 ```
 
 The package is typed (`py.typed`) and the test suite covers CLI behavior,
-template rendering, TOML writing, skill resolution, Codex command generation,
-home-directory resolution, and package metadata.
+template rendering, TOML writing, skill resolution, generated-file sync checks,
+Codex command generation, home-directory resolution, and package metadata.
 
 ## Release Notes
 
