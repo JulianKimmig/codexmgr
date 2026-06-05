@@ -62,7 +62,8 @@ def _append_block(current: str, block: str) -> str:
     """
     if not current:
         return f"{block}\n"
-    return f"{current.rstrip('\n')}\n\n{block}\n"
+    trimmed = current.rstrip("\n")
+    return f"{trimmed}\n\n{block}\n"
 
 
 def _format_block(generated_markdown: str) -> str:

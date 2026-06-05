@@ -8,7 +8,27 @@ on:
       - master
 
 jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Package
+        uses: ./.github/actions/install_package
+        with:
+          python_version: ${{ matrix.python-version }}
+
+      - name: Run Tests
+        run: uv run pytest
+
   version_publish:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -26,9 +46,6 @@ jobs:
         uses: ./.github/actions/install_package
         with:
           python_version: 3.12
-
-      - name: Run Tests
-        run: uv run pytest
 
       - name: Get current package version
         shell: bash
