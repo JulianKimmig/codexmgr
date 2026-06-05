@@ -13,26 +13,24 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "pytest" },
+    { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "codexmgr", extra = ["dev"] },
-    { name = "pyyaml" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3" },
+    { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.3" },
     { name = "tomlkit", specifier = ">=0.15.0" },
 ]
 provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "codexmgr", extras = ["dev"], editable = "." },
-    { name = "pyyaml", specifier = ">=6.0.3" },
-]
+dev = [{ name = "codexmgr", extras = ["dev"], editable = "." }]
 
 [[package]]
 name = "colorama"
