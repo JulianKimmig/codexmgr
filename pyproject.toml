@@ -1,0 +1,27 @@
+[project]
+name = "codexmgr"
+version = "0.1.0"
+description = "Command line interface for manage agents in Codex"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+codexmgr = "codexmgr.cli:entrypoint"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "codexmgr[dev]",
+]
+
+[tool.uv.sources]
+codexmgr = { workspace = true }
