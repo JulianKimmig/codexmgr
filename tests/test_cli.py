@@ -16,10 +16,10 @@ def test_setup_creates_project_codex_directory(workspace, run_cli):
     assert (project / ".codex").is_dir()
 
 
-def test_add_named_template_updates_config_without_applying(
-    workspace, write_home_template, run_cli, read_project_config
+def test_add_named_template_updates_config_and_applies(
+    workspace, write_home_template, run_cli, read_project_config, read_lock, assert_agents_md
 ):
-    """agentsmd add stores a named source without creating lock or AGENTS.md."""
+    """agentsmd add stores a named source and refreshes generated outputs."""
     project, codex_home = workspace
     write_home_template(
         codex_home,
@@ -36,13 +36,15 @@ text = "foo"
     assert exit_code == 0
     assert stderr == ""
     assert read_project_config(project)["agents_md"]["src"] == ["coding"]
+    assert read_lock(project)["agents_md"]["coding"]["basics"]["text"] == "foo"
     assert not (project / ".codex" / "agents-predef.toml").exists()
-    assert not (project / ".codex" / "codexmgr.lock").exists()
-    assert not (project / "AGENTS.md").exists()
+    assert_agents_md(project, "# basics\nfoo\n")
 
 
-def test_add_full_path_updates_config_with_path_source(workspace, run_cli, read_project_config):
-    """agentsmd add stores explicit path sources in codexmgr.toml."""
+def test_add_full_path_updates_config_with_path_source(
+    workspace, run_cli, read_project_config, read_lock, assert_agents_md
+):
+    """agentsmd add stores explicit path sources and applies them."""
     project, codex_home = workspace
     source = project / "custom.toml"
     source.write_text(
@@ -59,8 +61,8 @@ text = "from path"
     assert exit_code == 0
     assert stderr == ""
     assert read_project_config(project)["agents_md"]["src"] == [str(source)]
-    assert not (project / ".codex" / "codexmgr.lock").exists()
-    assert not (project / "AGENTS.md").exists()
+    assert read_lock(project)["agents_md"]["custom"]["rules"]["text"] == "from path"
+    assert_agents_md(project, "# rules\nfrom path\n")
 
 
 def test_add_does_not_duplicate_existing_source(
@@ -86,7 +88,7 @@ text = "foo"
     assert read_project_config(project)["agents_md"]["src"] == ["coding"]
 
 
-def test_add_named_template_uses_codex_home_environment(
+def test_add_named_template_uses_codexmgr_home_environment(
     workspace,
     monkeypatch,
     write_home_template,
@@ -94,11 +96,11 @@ def test_add_named_template_uses_codex_home_environment(
     run_cli_with_environment,
     read_project_config,
 ):
-    """Named add uses CODEX_HOME when Codex home is not injected."""
+    """Named add uses CODEXMGR_HOME when codexmgr home is not injected."""
     project, codex_home = workspace
-    env_codex_home = codex_home / "custom-codex"
+    env_codexmgr_home = codex_home / "custom-codexmgr"
     write_home_template(
-        env_codex_home,
+        env_codexmgr_home,
         "coding",
         '''
 [rules]
@@ -107,7 +109,7 @@ text = "from env"
     )
 
     run_cli(["setup"], project, codex_home)
-    monkeypatch.setenv("CODEX_HOME", str(env_codex_home))
+    monkeypatch.setenv("CODEXMGR_HOME", str(env_codexmgr_home))
     exit_code, _, stderr = run_cli_with_environment(["agentsmd", "add", "coding"], project)
 
     assert exit_code == 0
@@ -115,13 +117,15 @@ text = "from env"
     assert read_project_config(project)["agents_md"]["src"] == ["coding"]
 
 
-def test_remove_deletes_source_from_config_without_applying(
+def test_remove_deletes_source_from_config_and_applies(
     workspace,
     write_home_template,
     run_cli,
     read_project_config,
+    read_lock,
+    assert_agents_md,
 ):
-    """agentsmd remove updates source config but does not refresh outputs."""
+    """agentsmd remove updates source config and refreshes generated outputs."""
     project, codex_home = workspace
     write_home_template(
         codex_home,
@@ -148,8 +152,8 @@ text = "review"
     assert exit_code == 0
     assert stderr == ""
     assert read_project_config(project)["agents_md"]["src"] == ["review"]
-    assert not (project / ".codex" / "codexmgr.lock").exists()
-    assert not (project / "AGENTS.md").exists()
+    assert read_lock(project)["agents_md"].keys() == {"review"}
+    assert_agents_md(project, "# review\nreview\n")
 
 
 def test_apply_resolves_config_sources_writes_lock_and_agents_md(

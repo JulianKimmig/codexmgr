@@ -42,6 +42,12 @@ def run_cli_with_environment():
 
 
 @pytest.fixture
+def run_cli_with_homes():
+    """Return a helper that runs the CLI with separate Codex and codexmgr homes."""
+    return _run_cli_with_homes
+
+
+@pytest.fixture
 def read_project_config():
     """Return a helper that loads the project codexmgr.toml file."""
     return _read_project_config
@@ -74,12 +80,43 @@ def _write_home_template(codex_home: Path, name: str, content: str) -> Path:
 
 
 def _run_cli(argv: list[str], project: Path, codex_home: Path):
+    """Run the CLI with the same temporary directory for both home roots.
+
+    Args:
+        argv: CLI arguments without the executable name.
+        project: Project directory to use as the CLI working directory.
+        codex_home: Temporary home used for both Codex and codexmgr resources.
+
+    Returns:
+        The exit code, captured stdout, and captured stderr.
+    """
+    return _run_cli_with_homes(argv, project, codex_home, codex_home)
+
+
+def _run_cli_with_homes(
+    argv: list[str],
+    project: Path,
+    codex_home: Path,
+    codexmgr_home: Path,
+):
+    """Run the CLI with independent Codex and codexmgr home directories.
+
+    Args:
+        argv: CLI arguments without the executable name.
+        project: Project directory to use as the CLI working directory.
+        codex_home: Codex home used for named skills.
+        codexmgr_home: codexmgr home used for named AGENTS.md templates.
+
+    Returns:
+        The exit code, captured stdout, and captured stderr.
+    """
     stdout = io.StringIO()
     stderr = io.StringIO()
     exit_code = main(
         argv,
         cwd=project,
         codex_home=codex_home,
+        codexmgr_home=codexmgr_home,
         stdout=stdout,
         stderr=stderr,
     )

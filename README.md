@@ -22,9 +22,13 @@ codexmgr skill disable /path/to/skill
 `AGENTS.md`. It also writes skill enablement state to `.codex/config.toml`.
 `codex` runs the normal `codex` command with all arguments forwarded, while
 prepending `-c key=value` overrides for the complete `.codex/config.toml`.
+User-provided `-c` or `--config` values are merged into those generated
+overrides before the real `codex` command is called: later scalar values replace
+earlier values for the same key, while later list values append to the existing
+list.
 
-Named templates are loaded from `$CODEX_HOME/agentsmd/<name>.toml`. If
-`CODEX_HOME` is not set, the default is `~/.codex`.
+Named templates are loaded from `$CODEXMGR_HOME/agentsmd/<name>.toml`. If
+`CODEXMGR_HOME` is not set, the default is `~/.codexmgr`.
 
 Adding a template records its source in `.codex/codexmgr.toml`:
 
@@ -37,8 +41,9 @@ enabled = ["skill-name"]
 disabled = ["/path/to/skill"]
 ```
 
-Rendered markdown is written only when `apply` runs. It updates the project
-root `AGENTS.md` inside this managed block:
+Rendered markdown is refreshed when `apply` runs. Mutating commands run `apply`
+automatically unless `--no-sync` is provided. It updates the project root
+`AGENTS.md` inside this managed block:
 
 ```markdown
 <!-- BEGIN CODEXMGR GENERATED -->

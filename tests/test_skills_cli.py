@@ -10,8 +10,10 @@ def write_skill(codex_home, name):
     return skill_file
 
 
-def test_skill_enable_creates_enabled_entry(workspace, run_cli, read_project_config):
-    """skill enable records the skill in [skills].enabled."""
+def test_skill_enable_creates_enabled_entry_and_applies(
+    workspace, run_cli, read_project_config, read_lock, read_codex_config
+):
+    """skill enable records the skill and refreshes generated outputs."""
     project, codex_home = workspace
     run_cli(["setup"], project, codex_home)
 
@@ -24,10 +26,15 @@ def test_skill_enable_creates_enabled_entry(workspace, run_cli, read_project_con
         "enabled": ["coding"],
         "disabled": [],
     }
+    expected_entries = [{"name": "coding", "enabled": True}]
+    assert read_codex_config(project)["skills"]["config"] == expected_entries
+    assert read_lock(project)["skills"]["config"] == expected_entries
 
 
-def test_skill_disable_creates_disabled_entry(workspace, run_cli, read_project_config):
-    """skill disable records the skill in [skills].disabled."""
+def test_skill_disable_creates_disabled_entry_and_applies(
+    workspace, run_cli, read_project_config, read_lock, read_codex_config
+):
+    """skill disable records the skill and refreshes generated outputs."""
     project, codex_home = workspace
     run_cli(["setup"], project, codex_home)
 
@@ -40,6 +47,9 @@ def test_skill_disable_creates_disabled_entry(workspace, run_cli, read_project_c
         "enabled": [],
         "disabled": ["coding"],
     }
+    expected_entries = [{"name": "coding", "enabled": False}]
+    assert read_codex_config(project)["skills"]["config"] == expected_entries
+    assert read_lock(project)["skills"]["config"] == expected_entries
 
 
 def test_skill_enable_removes_skill_from_disabled(workspace, run_cli, read_project_config):
