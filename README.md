@@ -144,6 +144,8 @@ keeps template mistakes visible during `apply`.
 ```bash
 codexmgr setup
 codexmgr apply
+codexmgr cd [--path | --explorer | --terminal]
+codexmgr agentsmd list
 codexmgr agentsmd add [--no-sync] <name-or-template-path>
 codexmgr agentsmd remove [--no-sync] <name-or-template-path>
 codexmgr skill enable [--no-sync] <name-or-skill-path>
@@ -157,6 +159,14 @@ codexmgr codex <args...>
 `.codex/codexmgr.lock`, updates `.codex/config.toml` skill entries when a
 `[skills]` table is configured, and refreshes the generated `AGENTS.md` block
 when `[agents_md]` is configured.
+
+`cd` prints shell code for navigating to `$CODEXMGR_HOME`. Use
+`eval "$(codexmgr cd)"` to change the current shell, `codexmgr cd --path` to
+print only the path, `codexmgr cd --explorer` to print a file-explorer command,
+and `codexmgr cd --terminal` to print a new-terminal command.
+
+`agentsmd list` prints the named templates available under
+`$CODEXMGR_HOME/agentsmd` in sorted order.
 
 `agentsmd add` validates that the template exists before writing config.
 Repeated adds keep one source entry.

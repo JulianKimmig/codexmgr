@@ -5,9 +5,10 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
-from .agentsmd import add_agentsmd, remove_agentsmd
+from .agentsmd import add_agentsmd, list_agentsmd_options, remove_agentsmd
 from .codex import run_codex
 from .errors import CommandError
+from .navigation import add_cd_arguments, format_codexmgr_home_command
 from .paths import global_codex_dir, global_codexmgr_dir
 from .project import apply_project_config, setup_project
 from .skills import disable_skill, enable_skill
@@ -87,6 +88,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("setup", help="Create a project .codex directory")
     subparsers.add_parser("apply", help="Apply the project Codex configuration")
+    cd = subparsers.add_parser("cd", help="Print shell navigation for CODEXMGR_HOME")
+    add_cd_arguments(cd)
 
     codex = subparsers.add_parser("codex", add_help=False, help="Run codex with project config")
     codex.add_argument("codex_args", nargs=argparse.REMAINDER)
@@ -101,6 +104,8 @@ def _build_parser() -> argparse.ArgumentParser:
     remove = agentsmd_subparsers.add_parser("remove", help="Remove an AGENTS.md template")
     _add_no_sync_argument(remove)
     remove.add_argument("source_id", help="Template source identifier")
+
+    agentsmd_subparsers.add_parser("list", help="List available AGENTS.md templates")
 
     skill = subparsers.add_parser("skill", help="Manage project skill configuration")
     skill_subparsers = skill.add_subparsers(dest="skill_command", required=True)
@@ -161,8 +166,20 @@ def _dispatch(
         stdout.write("Applied project Codex configuration\n")
         return 0
 
+    if args.command == "cd":
+        stdout.write(
+            f"{format_codexmgr_home_command(codexmgr_home, args.cd_action)}\n"
+        )
+        return 0
+
     if args.command == "codex":
         return run_codex(cwd, args.codex_args)
+
+    if args.command == "agentsmd" and args.agentsmd_command == "list":
+        options = list_agentsmd_options(codexmgr_home)
+        if options:
+            stdout.write("\n".join(options) + "\n")
+        return 0
 
     if args.command == "agentsmd" and args.agentsmd_command == "add":
         source_id = add_agentsmd(args.reference, cwd, codexmgr_home)

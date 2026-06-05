@@ -5,6 +5,7 @@ from typing import Any
 
 from .agents_file import write_managed_agents_md
 from .errors import CommandError
+from .options import list_toml_options
 from .paths import agents_md_path, config_path, resolve_template
 from .project_config import (
     agents_md_sources,
@@ -57,6 +58,19 @@ def remove_agentsmd(source_id: str, cwd: Path) -> str:
     set_agents_md_sources(config, [source for source in sources if source != source_id])
     write_toml_file(config_path(cwd), config)
     return source_id
+
+
+def list_agentsmd_options(codexmgr_home: Path) -> list[str]:
+    """List named AGENTS.md template options available to add.
+
+    Args:
+        codexmgr_home: codexmgr home directory containing the ``agentsmd``
+            template store.
+
+    Returns:
+        Sorted template names that can be passed to ``codexmgr agentsmd add``.
+    """
+    return list_toml_options(codexmgr_home / "agentsmd")
 
 
 def resolve_locked_agents_md(
