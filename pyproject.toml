@@ -3,7 +3,7 @@ name = "codexmgr"
 version = "0.1.0"
 description = "Command line interface for manage agents in Codex"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = []
 
 [project.scripts]
