@@ -6,11 +6,14 @@ from typing import Any
 
 from .agents_file import render_managed_agents_md
 from .agentsmd import resolve_locked_agents_md
+from .errors import CommandError
+from .mcp import resolve_overrides
+from .mcp_apply import apply_mcp_overrides, mcp_lock_data
 from .paths import agents_md_path, codex_config_path, lock_path, project_codex_dir
 from .project_config import load_required_project_config
 from .renderer import render_agents_markdown
-from .skills import build_codex_skill_config, resolve_codex_skill_entries
-from .toml_io import dump_toml
+from .skills import resolve_codex_skill_entries
+from .toml_io import dump_toml, ensure_toml_table, load_optional_toml_file
 
 
 @dataclass(frozen=True)
@@ -68,14 +71,18 @@ def build_project_files(
         Expected generated files with their complete text content.
     """
     config = load_required_project_config(cwd)
+    previous_lock = load_optional_toml_file(lock_path(cwd))
     locked_agents_md = resolve_locked_agents_md(config, cwd, codexmgr_home)
     skill_entries = resolve_codex_skill_entries(config, cwd, codex_home)
-    codex_config = build_codex_skill_config(
-        skill_entries,
+    mcp_overrides = resolve_overrides(config, strict=True)
+    codex_config = _codex_config(
         cwd,
-        include_empty="skills" in config,
+        config,
+        skill_entries,
+        mcp_overrides,
+        previous_lock,
     )
-    lock_data = _lock_data(config, locked_agents_md, skill_entries)
+    lock_data = _lock_data(config, locked_agents_md, skill_entries, mcp_overrides)
     return _generated_files(cwd, config, locked_agents_md, lock_data, codex_config)
 
 
@@ -127,17 +134,64 @@ def _read_existing_text(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
+def _codex_config(
+    cwd: Path,
+    config: dict[str, Any],
+    skill_entries: list[dict[str, Any]],
+    mcp_overrides: dict[str, dict[str, Any]],
+    previous_lock: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Build generated project-local Codex config content.
+
+    Args:
+        cwd: Project directory whose .codex/config.toml should be updated.
+        config: Parsed project codexmgr configuration.
+        skill_entries: Resolved Codex skill configuration entries.
+        mcp_overrides: Resolved MCP server overrides.
+        previous_lock: Existing codexmgr lock data.
+
+    Returns:
+        Parsed .codex/config.toml data, or None when no config output is needed.
+    """
+    if "skills" not in config and "mcp" not in config:
+        return None
+
+    codex_config = load_optional_toml_file(codex_config_path(cwd))
+    if "skills" in config:
+        _set_skill_config(codex_config, skill_entries)
+    if "mcp" in config:
+        apply_mcp_overrides(codex_config, mcp_overrides, previous_lock)
+    return codex_config
+
+
+def _set_skill_config(codex_config: dict[str, Any], entries: list[dict[str, Any]]) -> None:
+    """Set generated skills.config entries in a local Codex config document.
+
+    Args:
+        codex_config: Mutable .codex/config.toml document.
+        entries: Resolved skills.config entries.
+    """
+    skills = ensure_toml_table(
+        codex_config,
+        "skills",
+        ".codex/config.toml [skills] must be a table",
+    )
+    skills["config"] = entries
+
+
 def _lock_data(
     config: dict[str, Any],
     locked_agents_md: dict[str, Any],
     skill_entries: list[dict[str, Any]],
+    mcp_overrides: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    """Build lockfile data for configured AGENTS.md sources and skills.
+    """Build lockfile data for configured AGENTS.md, skills, and MCP overrides.
 
     Args:
         config: Parsed project codexmgr configuration.
         locked_agents_md: Resolved AGENTS.md source data.
         skill_entries: Resolved Codex skill configuration entries.
+        mcp_overrides: Resolved MCP server overrides.
 
     Returns:
         Lockfile data to write, or an empty dictionary when nothing is configured.
@@ -147,4 +201,6 @@ def _lock_data(
         lock_data["agents_md"] = locked_agents_md
     if "skills" in config:
         lock_data["skills"] = {"config": skill_entries}
+    if "mcp" in config:
+        lock_data["mcp"] = mcp_lock_data(mcp_overrides)
     return lock_data

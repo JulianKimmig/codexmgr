@@ -3,15 +3,14 @@
 `codexmgr` manages project-local Codex configuration from reusable templates.
 It keeps hand-written project instructions in `AGENTS.md` and generated Codex
 configuration in `.codex/` synchronized from a small declarative
-`.codex/codexmgr.toml` file. It can also toggle and lightly edit existing user
-MCP server entries in `$CODEX_HOME/config.toml`.
+`.codex/codexmgr.toml` file. It can also keep project-local MCP server
+overrides in sync without editing the user Codex config.
 
 The tool is intentionally narrow:
 
 - compose reusable AGENTS.md instruction fragments
 - enable or disable Codex skills per project
-- enable, disable, inspect, and update safe parameters on existing user MCP
-  servers
+- enable, disable, inspect, and update safe project-local MCP overrides
 - write reproducible lock data for the resolved project configuration
 - run `codex` with project `.codex/config.toml` values translated into `-c`
   overrides
@@ -75,8 +74,10 @@ This updates `.codex/codexmgr.toml`, runs `apply`, writes
 
 - `.codex/codexmgr.toml`: source configuration edited by CLI commands or by
   hand
-- `.codex/codexmgr.lock`: resolved template and skill state written by `apply`
+- `.codex/codexmgr.lock`: resolved template, skill, and MCP state written by
+  `apply`
 - `.codex/config.toml`: Codex config updated with `[[skills.config]]` entries
+  and `[mcp_servers.<id>]` overrides
 - `AGENTS.md`: project instructions, with only the managed block replaced
 
 The managed AGENTS.md block is:
@@ -91,7 +92,8 @@ Manual content outside this block is preserved. If the block is missing,
 
 ## Project Configuration
 
-`.codex/codexmgr.toml` supports AGENTS.md templates and skill state:
+`.codex/codexmgr.toml` supports AGENTS.md templates, skill state, and MCP
+overrides:
 
 ```toml
 [agents_md]
@@ -100,6 +102,11 @@ src = ["coding", "/absolute/or/project-relative/template.toml"]
 [skills]
 enabled = ["review-helper"]
 disabled = ["experimental-skill", "skills/local-disabled"]
+
+[mcp.servers.browsermcp]
+enabled = true
+bearer_token_env_var = "BROWSERMCP_TOKEN"
+env_vars = ["BROWSER_ENV"]
 ```
 
 Named AGENTS.md templates resolve from `$CODEXMGR_HOME/agentsmd/<name>.toml`.
@@ -163,15 +170,15 @@ codexmgr skill enable [--no-sync] <name-or-skill-path>
 codexmgr skill disable [--no-sync] <name-or-skill-path>
 codexmgr mcp list
 codexmgr mcp show <server-id>
-codexmgr mcp validate [server-id]
-codexmgr mcp enable <server-id>
-codexmgr mcp disable <server-id>
-codexmgr mcp set-token-env <server-id> <ENV_VAR>
-codexmgr mcp add-env-var <server-id> <ENV_VAR>
-codexmgr mcp remove-env-var <server-id> <ENV_VAR>
-codexmgr mcp set-env-header <server-id> <HEADER> <ENV_VAR>
-codexmgr mcp unset-env-header <server-id> <HEADER>
-codexmgr mcp set-field <server-id> <field> <toml-value>
+codexmgr mcp validate
+codexmgr mcp enable [--no-sync] <server-id>
+codexmgr mcp disable [--no-sync] <server-id>
+codexmgr mcp set-token-env [--no-sync] <server-id> <ENV_VAR>
+codexmgr mcp add-env-var [--no-sync] <server-id> <ENV_VAR>
+codexmgr mcp remove-env-var [--no-sync] <server-id> <ENV_VAR>
+codexmgr mcp set-env-header [--no-sync] <server-id> <HEADER> <ENV_VAR>
+codexmgr mcp unset-env-header [--no-sync] <server-id> <HEADER>
+codexmgr mcp set-field [--no-sync] <server-id> <field> <toml-value>
 codexmgr codex <args...>
 ```
 
@@ -179,8 +186,9 @@ codexmgr codex <args...>
 
 `apply` reads `.codex/codexmgr.toml`, resolves configured sources, writes
 `.codex/codexmgr.lock`, updates `.codex/config.toml` skill entries when a
-`[skills]` table is configured, and refreshes the generated `AGENTS.md` block
-when `[agents_md]` is configured.
+`[skills]` table is configured, writes local `[mcp_servers.<id>]` overrides when
+`[mcp]` is configured, and refreshes the generated `AGENTS.md` block when
+`[agents_md]` is configured.
 
 `apply --check` exits with a failure if generated files are out of sync without
 writing them. `apply --diff` also avoids writing and prints unified diffs for
@@ -197,25 +205,31 @@ referenced snippets, enabled skills, and stale generated files.
 `status` prints the resolved homes, configured snippets and skills, and whether
 generated files are in sync.
 
-## User MCP Servers
+## Project MCP Overrides
 
-`codexmgr mcp ...` works on the user Codex config file:
+`codexmgr mcp ...` edits only project-local configuration:
 
-- `$CODEX_HOME/config.toml` when `CODEX_HOME` is set
-- `~/.codex/config.toml` when `CODEX_HOME` is unset
+- source state is stored in `.codex/codexmgr.toml` under
+  `[mcp.servers.<id>]`
+- `apply` writes generated overrides into `.codex/config.toml` under
+  `[mcp_servers.<id>]`
+- `$CODEX_HOME/config.toml` and `~/.codex/config.toml` are never modified
 
-These commands do not use `.codex/codexmgr.toml`, do not run `apply`, and do
-not require a project `.codex/` directory. They only operate on existing
-`[mcp_servers.<id>]` tables. Use `codex mcp add` or direct `config.toml` editing
-to create or remove MCP server definitions.
+Mutating MCP commands require a project `.codex/` directory and run `apply`
+automatically unless `--no-sync` is passed. They do not create or remove MCP
+server definitions; use `codex mcp add` or direct Codex config editing for the
+base server setup.
 
-List existing user MCP servers:
+List MCP servers available from Codex and show any project override state:
 
 ```bash
 codexmgr mcp list
 codexmgr mcp show context7
 codexmgr mcp validate
 ```
+
+`codexmgr mcp list` shells out to `codex mcp list --json` for read-only
+discovery. It does not edit user configuration.
 
 Enable or disable an existing server without deleting its definition:
 
@@ -244,12 +258,12 @@ codexmgr mcp set-field context7 default_tools_approval_mode '"prompt"'
 
 Supported `set-field` names are `required`, `startup_timeout_sec`,
 `tool_timeout_sec`, `enabled_tools`, `disabled_tools`, and
-`default_tools_approval_mode`.
+`default_tools_approval_mode`. The direct `enable` and `disable` commands manage
+the `enabled` field.
 
-`codexmgr mcp show` and `codexmgr mcp validate` never print raw `env` values or
-static `http_headers` values. Literal API token writes are intentionally not part
-of this command surface; prefer environment variable references such as
-`bearer_token_env_var`, `env_vars`, and `env_http_headers`.
+Literal API token writes are intentionally not part of this command surface;
+prefer environment variable references such as `bearer_token_env_var`,
+`env_vars`, and `env_http_headers`.
 
 `agentsmd list` prints the named templates available under
 `$CODEXMGR_HOME/agentsmd` in sorted order.

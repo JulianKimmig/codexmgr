@@ -2,17 +2,19 @@
 
 import json
 import re
-import tomllib
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping, Sequence
 from pathlib import Path
 from typing import Any
+
+import tomlkit
+from tomlkit.exceptions import TOMLKitError
 
 from .errors import CommandError
 
 BARE_KEY = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
-def load_toml_file(path: Path) -> dict[str, Any]:
+def load_toml_file(path: Path) -> MutableMapping[str, Any]:
     """Load a TOML file and convert parse failures into CommandError.
 
     Args:
@@ -22,22 +24,22 @@ def load_toml_file(path: Path) -> dict[str, Any]:
         Parsed TOML document.
     """
     try:
-        return tomllib.loads(path.read_text(encoding="utf-8"))
-    except tomllib.TOMLDecodeError as exc:
+        return tomlkit.parse(path.read_text(encoding="utf-8"))
+    except TOMLKitError as exc:
         raise CommandError(f"Invalid TOML in {path}: {exc}") from exc
 
 
-def load_optional_toml_file(path: Path) -> dict[str, Any]:
+def load_optional_toml_file(path: Path) -> MutableMapping[str, Any]:
     """Load a TOML file or return an empty document when it is missing.
 
     Args:
         path: Optional TOML file path to read.
 
     Returns:
-        Parsed TOML document, or an empty dictionary.
+        Parsed TOML document, or an empty TOML document.
     """
     if not path.exists():
-        return {}
+        return tomlkit.document()
     return load_toml_file(path)
 
 
@@ -54,6 +56,59 @@ def write_toml_file(path: Path, data: Mapping[str, Any]) -> None:
     path.write_text(dump_toml(data), encoding="utf-8")
 
 
+def new_toml_table() -> MutableMapping[str, Any]:
+    """Create an empty TOML table suitable for insertion into a document.
+
+    Returns:
+        A mutable TOML table.
+    """
+    return tomlkit.table()
+
+
+def ensure_toml_table(
+    container: MutableMapping[str, Any],
+    key: str,
+    error_message: str,
+) -> MutableMapping[str, Any]:
+    """Return an existing child table or create a new one.
+
+    Args:
+        container: Parent TOML mapping.
+        key: Child table key.
+        error_message: Error to raise when the key exists but is not a table.
+
+    Returns:
+        Mutable child TOML table.
+    """
+    existing = container.get(key)
+    if existing is None:
+        table = new_toml_table()
+        container[key] = table
+        return table
+    if not isinstance(existing, MutableMapping):
+        raise CommandError(error_message)
+    return existing
+
+
+def plain_toml_value(value: Any) -> Any:
+    """Convert TOMLKit scalar/container wrappers into plain Python values.
+
+    Args:
+        value: TOMLKit value or plain Python value.
+
+    Returns:
+        Plain Python value with mappings and lists recursively converted.
+    """
+    unwrap = getattr(value, "unwrap", None)
+    if callable(unwrap):
+        return unwrap()
+    if isinstance(value, Mapping):
+        return {key: plain_toml_value(item) for key, item in value.items()}
+    if _is_sequence(value):
+        return [plain_toml_value(item) for item in value]
+    return value
+
+
 def format_toml_value(value: Any) -> str:
     """Format a Python value as a TOML literal.
 
@@ -63,11 +118,11 @@ def format_toml_value(value: Any) -> str:
     Returns:
         TOML literal string.
     """
-    return _format_value(value)
+    return _format_value(plain_toml_value(value))
 
 
 def dump_toml(data: Mapping[str, Any]) -> str:
-    """Serialize supported TOML data into a deterministic TOML document.
+    """Serialize supported TOML data into a TOML document.
 
     Args:
         data: Parsed TOML-style mapping to serialize.
@@ -75,63 +130,36 @@ def dump_toml(data: Mapping[str, Any]) -> str:
     Returns:
         TOML document text ending with a newline when non-empty.
     """
-    tables = list(_iter_tables(data))
-    chunks = [_format_table(path, values, is_array) for is_array, path, values in tables]
-    return "\n\n".join(chunks) + ("\n" if chunks else "")
+    _reject_nested_tables_in_array_items(data)
+    text = tomlkit.dumps(data)
+    return text if not text or text.endswith("\n") else f"{text}\n"
 
 
-def _iter_tables(
+def _reject_nested_tables_in_array_items(
     data: Mapping[str, Any],
     prefix: tuple[str, ...] = (),
-) -> list[tuple[bool, tuple[str, ...], dict[str, Any]]]:
-    """Flatten nested TOML tables into renderable table chunks.
+) -> None:
+    """Fail before TOML serialization would emit unsupported nested arrays.
 
     Args:
         data: Mapping for the current TOML table.
         prefix: TOML path for the current table.
-
-    Returns:
-        Table chunks as ``(is_array, path, values)`` tuples.
     """
-    scalars: dict[str, Any] = {}
-    children: list[tuple[str, Mapping[str, Any]]] = []
-    arrays: list[tuple[str, list[Mapping[str, Any]]]] = []
-
     for key, value in data.items():
+        path = (*prefix, key)
         if _is_array_of_tables(value):
-            arrays.append((key, value))
+            _reject_nested_array_tables(value, path)
         elif isinstance(value, Mapping):
-            children.append((key, value))
-        else:
-            scalars[key] = value
-
-    tables: list[tuple[bool, tuple[str, ...], dict[str, Any]]] = []
-    if scalars:
-        tables.append((False, prefix, scalars))
-
-    for key, child in children:
-        tables.extend(_iter_tables(child, (*prefix, key)))
-
-    for key, items in arrays:
-        tables.extend(_iter_array_tables(items, (*prefix, key)))
-
-    return tables
+            _reject_nested_tables_in_array_items(value, path)
 
 
-def _iter_array_tables(
-    items: list[Mapping[str, Any]],
-    prefix: tuple[str, ...],
-) -> list[tuple[bool, tuple[str, ...], dict[str, Any]]]:
-    """Flatten TOML array-of-table items into renderable chunks.
+def _reject_nested_array_tables(items: Sequence[Any], prefix: tuple[str, ...]) -> None:
+    """Reject nested mappings inside array-of-table items.
 
     Args:
         items: Array items that are all mappings.
         prefix: TOML path for the array-of-table.
-
-    Returns:
-        Array table chunks as ``(True, path, values)`` tuples.
     """
-    tables: list[tuple[bool, tuple[str, ...], dict[str, Any]]] = []
     for item in items:
         for key, value in item.items():
             if isinstance(value, Mapping):
@@ -139,29 +167,6 @@ def _iter_array_tables(
                 raise CommandError(
                     f"Unsupported nested table in TOML array item: {path}"
                 )
-        scalars = dict(item)
-        tables.append((True, prefix, scalars))
-    return tables
-
-
-def _format_table(path: tuple[str, ...], values: Mapping[str, Any], is_array: bool) -> str:
-    """Format one TOML table chunk.
-
-    Args:
-        path: TOML table path.
-        values: Scalar values to write in the table.
-        is_array: Whether the table is an array-of-tables item.
-
-    Returns:
-        TOML text for the table chunk.
-    """
-    formatted_path = ".".join(_format_key(part) for part in path)
-    lines = []
-    if path:
-        heading = f"[[{formatted_path}]]" if is_array else f"[{formatted_path}]"
-        lines.append(heading)
-    lines.extend(f"{_format_key(key)} = {_format_value(value)}" for key, value in values.items())
-    return "\n".join(lines)
 
 
 def _is_array_of_tables(value: Any) -> bool:
@@ -173,7 +178,23 @@ def _is_array_of_tables(value: Any) -> bool:
     Returns:
         True when the value is a non-empty list containing only mappings.
     """
-    return isinstance(value, list) and bool(value) and all(isinstance(item, Mapping) for item in value)
+    return (
+        _is_sequence(value)
+        and bool(value)
+        and all(isinstance(item, Mapping) for item in value)
+    )
+
+
+def _is_sequence(value: Any) -> bool:
+    """Return whether a value is a non-string sequence.
+
+    Args:
+        value: Candidate sequence.
+
+    Returns:
+        True when the value behaves like a list or tuple.
+    """
+    return isinstance(value, Sequence) and not isinstance(value, str | bytes)
 
 
 def _format_key(key: str) -> str:

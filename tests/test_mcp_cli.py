@@ -1,272 +1,308 @@
-"""CLI behavior tests for MCP user config management."""
+"""CLI tests for project-local MCP override management."""
 
-import tomllib
-from pathlib import Path
-
-
-def write_user_config(codex_home: Path, content: str) -> None:
-    """Write a temporary CODEX_HOME config.toml fixture.
-
-    Args:
-        codex_home: Temporary Codex home directory.
-        content: TOML content to write.
-    """
-    (codex_home / "config.toml").write_text(content, encoding="utf-8")
+from types import SimpleNamespace
 
 
-def read_user_config(codex_home: Path):
-    """Read a temporary CODEX_HOME config.toml fixture.
-
-    Args:
-        codex_home: Temporary Codex home directory.
-
-    Returns:
-        Parsed TOML data.
-    """
-    return tomllib.loads((codex_home / "config.toml").read_text(encoding="utf-8"))
-
-
-def test_mcp_show_redacts_raw_env_and_static_headers(workspace, run_cli):
-    """show displays safe metadata without printing raw secret values."""
+def test_mcp_enable_writes_project_config_and_applies_without_touching_user_config(
+    workspace,
+    run_cli,
+    read_project_config,
+    read_codex_config,
+    read_lock,
+):
+    """mcp enable records a project override and writes local Codex config."""
     project, codex_home = workspace
-    write_user_config(
-        codex_home,
+    user_config = codex_home / "config.toml"
+    user_config.write_text(
         '''
-[mcp_servers.secure]
-url = "https://mcp.example.test/mcp"
-bearer_token_env_var = "MCP_TOKEN"
-env_vars = ["VISIBLE_ENV"]
-http_headers = { Authorization = "Bearer raw-secret" }
-
-[mcp_servers.secure.env]
-API_TOKEN = "raw-env-secret"
+[mcp_servers.browsermcp]
+command = "browsermcp"
+enabled = false
 ''',
+        encoding="utf-8",
     )
+    original_user_config = user_config.read_text(encoding="utf-8")
+    run_cli(["setup"], project, codex_home)
 
-    exit_code, stdout, stderr = run_cli(["mcp", "show", "secure"], project, codex_home)
+    exit_code, stdout, stderr = run_cli(["mcp", "enable", "browsermcp"], project, codex_home)
 
     assert exit_code == 0
     assert stderr == ""
-    assert "Server: secure" in stdout
-    assert "Transport: http" in stdout
-    assert "Bearer token env var: MCP_TOKEN" in stdout
-    assert "Forwarded env vars: VISIBLE_ENV" in stdout
-    assert "Raw env values: API_TOKEN=<redacted>" in stdout
-    assert "Static HTTP headers: Authorization=<redacted>" in stdout
-    assert "raw-secret" not in stdout
-    assert "raw-env-secret" not in stdout
+    assert stdout == (
+        "Enabled MCP server override browsermcp\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["mcp"]["servers"]["browsermcp"] == {
+        "enabled": True,
+    }
+    assert read_codex_config(project)["mcp_servers"]["browsermcp"] == {
+        "enabled": True,
+    }
+    assert read_lock(project)["mcp"]["servers"]["browsermcp"] == {
+        "enabled": True,
+    }
+    assert user_config.read_text(encoding="utf-8") == original_user_config
 
 
-def test_mcp_show_missing_server_fails(workspace, run_cli):
-    """show fails for server ids that do not exist."""
+def test_mcp_disable_no_sync_updates_only_codexmgr_toml(workspace, run_cli, read_project_config):
+    """--no-sync keeps generated local Codex config untouched."""
     project, codex_home = workspace
-    write_user_config(
+    run_cli(["setup"], project, codex_home)
+
+    exit_code, stdout, stderr = run_cli(
+        ["mcp", "disable", "--no-sync", "browsermcp"],
+        project,
         codex_home,
-        '''
-[mcp_servers.context7]
-command = "npx"
-''',
     )
 
-    exit_code, stdout, stderr = run_cli(["mcp", "show", "missing"], project, codex_home)
+    assert exit_code == 0
+    assert stderr == ""
+    assert stdout == "Disabled MCP server override browsermcp\n"
+    assert read_project_config(project)["mcp"]["servers"]["browsermcp"] == {
+        "enabled": False,
+    }
+    assert not (project / ".codex" / "config.toml").exists()
+    assert not (codex_home / "config.toml").exists()
+
+
+def test_mcp_mutation_preserves_codexmgr_toml_comments(workspace, run_cli):
+    """MCP mutations preserve existing comments in project codexmgr.toml."""
+    project, codex_home = workspace
+    run_cli(["setup"], project, codex_home)
+    config_path = project / ".codex" / "codexmgr.toml"
+    config_path.write_text(
+        '''
+# project source config
+[skills]
+# keep this skills comment
+enabled = []
+disabled = []
+''',
+        encoding="utf-8",
+    )
+
+    exit_code, _, stderr = run_cli(
+        ["mcp", "enable", "--no-sync", "browsermcp"],
+        project,
+        codex_home,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    content = config_path.read_text(encoding="utf-8")
+    assert "# project source config" in content
+    assert "# keep this skills comment" in content
+    assert "[mcp.servers.browsermcp]" in content
+
+
+def test_mcp_apply_preserves_existing_local_server_fields(workspace, run_cli, read_codex_config):
+    """Generated MCP overrides update fields without replacing manual local fields."""
+    project, codex_home = workspace
+    run_cli(["setup"], project, codex_home)
+    (project / ".codex" / "config.toml").write_text(
+        '''
+model = "gpt-5"
+
+[mcp_servers.browsermcp]
+command = "browsermcp"
+args = ["--port", "3000"]
+enabled = false
+''',
+        encoding="utf-8",
+    )
+
+    exit_code, _, stderr = run_cli(["mcp", "enable", "browsermcp"], project, codex_home)
+
+    assert exit_code == 0
+    assert stderr == ""
+    config = read_codex_config(project)
+    assert config["model"] == "gpt-5"
+    assert config["mcp_servers"]["browsermcp"] == {
+        "command": "browsermcp",
+        "args": ["--port", "3000"],
+        "enabled": True,
+    }
+
+
+def test_mcp_commands_require_project_setup(workspace, run_cli):
+    """mcp mutations are project config changes and require .codex/."""
+    project, codex_home = workspace
+
+    exit_code, stdout, stderr = run_cli(["mcp", "enable", "browsermcp"], project, codex_home)
 
     assert exit_code == 1
     assert stdout == ""
-    assert "MCP server not found: missing" in stderr
+    assert "Project .codex directory not found" in stderr
+    assert not (codex_home / "config.toml").exists()
 
 
-def test_mcp_set_token_env_updates_existing_server(workspace, run_cli):
-    """set-token-env stores a bearer token environment variable name."""
+def test_mcp_list_merges_codex_servers_with_project_overrides(workspace, run_cli, monkeypatch):
+    """mcp list shows available Codex servers plus local override state."""
     project, codex_home = workspace
-    write_user_config(
-        codex_home,
-        '''
-[mcp_servers.figma]
-url = "https://mcp.figma.com/mcp"
+    captured = {}
+
+    def fake_run(command, cwd, capture_output, text):
+        captured["command"] = command
+        captured["cwd"] = cwd
+        captured["capture_output"] = capture_output
+        captured["text"] = text
+        return SimpleNamespace(
+            returncode=0,
+            stdout='''
+[
+  {"name": "browsermcp", "enabled": true},
+  {"name": "context7", "enabled": false}
+]
 ''',
-    )
+            stderr="",
+        )
 
-    exit_code, stdout, stderr = run_cli(
-        ["mcp", "set-token-env", "figma", "FIGMA_TOKEN"],
-        project,
-        codex_home,
-    )
+    monkeypatch.setattr("codexmgr.mcp_discovery.subprocess.run", fake_run)
+    run_cli(["setup"], project, codex_home)
+    run_cli(["mcp", "disable", "--no-sync", "browsermcp"], project, codex_home)
+    run_cli(["mcp", "set-token-env", "--no-sync", "browsermcp", "BROWSERMCP_TOKEN"], project, codex_home)
 
-    assert exit_code == 0
-    assert stderr == ""
-    assert stdout == "Updated MCP server figma bearer_token_env_var\n"
-    assert (
-        read_user_config(codex_home)["mcp_servers"]["figma"]["bearer_token_env_var"]
-        == "FIGMA_TOKEN"
-    )
+    list_exit, list_stdout, list_stderr = run_cli(["mcp", "list"], project, codex_home)
+
+    assert captured == {
+        "command": ["codex", "mcp", "list", "--json"],
+        "cwd": project,
+        "capture_output": True,
+        "text": True,
+    }
+    assert list_exit == 0
+    assert list_stderr == ""
+    assert "browsermcp available=enabled override=disabled" in list_stdout
+    assert "fields=bearer_token_env_var, enabled" in list_stdout
+    assert "context7 available=disabled override=none" in list_stdout
 
 
-def test_mcp_add_env_var_preserves_inline_entries_and_avoids_duplicates(workspace, run_cli):
-    """add-env-var appends string env vars while preserving object entries."""
+def test_mcp_list_reports_codex_discovery_failures(workspace, run_cli, monkeypatch):
+    """mcp list fails loudly when Codex server discovery fails."""
     project, codex_home = workspace
-    write_user_config(
-        codex_home,
-        '''
-[mcp_servers.context7]
-command = "npx"
-env_vars = ["LOCAL_TOKEN", { name = "REMOTE_TOKEN", source = "remote" }]
-''',
-    )
 
-    first_exit, _, first_err = run_cli(
-        ["mcp", "add-env-var", "context7", "LOCAL_TOKEN"],
-        project,
-        codex_home,
-    )
-    second_exit, stdout, second_err = run_cli(
-        ["mcp", "add-env-var", "context7", "EXTRA_TOKEN"],
-        project,
-        codex_home,
-    )
+    def fake_run(command, cwd, capture_output, text):
+        return SimpleNamespace(returncode=2, stdout="", stderr="bad config")
 
-    assert first_exit == 0
-    assert first_err == ""
-    assert second_exit == 0
-    assert second_err == ""
-    assert stdout == "Updated MCP server context7 env_vars\n"
-    env_vars = read_user_config(codex_home)["mcp_servers"]["context7"]["env_vars"]
-    assert env_vars == [
-        "LOCAL_TOKEN",
-        {"name": "REMOTE_TOKEN", "source": "remote"},
-        "EXTRA_TOKEN",
+    monkeypatch.setattr("codexmgr.mcp_discovery.subprocess.run", fake_run)
+
+    exit_code, stdout, stderr = run_cli(["mcp", "list"], project, codex_home)
+
+    assert exit_code == 1
+    assert stdout == ""
+    assert "codex mcp list --json failed: bad config" in stderr
+
+
+def test_mcp_show_reads_project_overrides(workspace, run_cli):
+    """mcp show inspects configured project override entries."""
+    project, codex_home = workspace
+    run_cli(["setup"], project, codex_home)
+    run_cli(["mcp", "disable", "--no-sync", "browsermcp"], project, codex_home)
+    run_cli(["mcp", "set-token-env", "--no-sync", "browsermcp", "BROWSERMCP_TOKEN"], project, codex_home)
+
+    show_exit, show_stdout, show_stderr = run_cli(["mcp", "show", "browsermcp"], project, codex_home)
+
+    assert show_exit == 0
+    assert show_stderr == ""
+    assert "Server override: browsermcp" in show_stdout
+    assert "State: disabled" in show_stdout
+    assert "Bearer token env var: BROWSERMCP_TOKEN" in show_stdout
+
+
+def test_mcp_parameter_commands_write_project_overrides(workspace, run_cli, read_project_config):
+    """Parameter commands mutate the [mcp.servers] project override table."""
+    project, codex_home = workspace
+    run_cli(["setup"], project, codex_home)
+
+    commands = [
+        ["mcp", "set-token-env", "--no-sync", "browsermcp", "BROWSERMCP_TOKEN"],
+        ["mcp", "add-env-var", "--no-sync", "browsermcp", "BROWSER_ENV"],
+        ["mcp", "add-env-var", "--no-sync", "browsermcp", "BROWSER_ENV"],
+        ["mcp", "set-env-header", "--no-sync", "browsermcp", "Authorization", "AUTH_ENV"],
+        ["mcp", "set-field", "--no-sync", "browsermcp", "enabled_tools", '["open"]'],
+        ["mcp", "set-field", "--no-sync", "browsermcp", "required", "true"],
     ]
+    for command in commands:
+        exit_code, _, stderr = run_cli(command, project, codex_home)
+        assert exit_code == 0
+        assert stderr == ""
+
+    server = read_project_config(project)["mcp"]["servers"]["browsermcp"]
+    assert server == {
+        "bearer_token_env_var": "BROWSERMCP_TOKEN",
+        "env_vars": ["BROWSER_ENV"],
+        "env_http_headers": {"Authorization": "AUTH_ENV"},
+        "enabled_tools": ["open"],
+        "required": True,
+    }
+    assert not (codex_home / "config.toml").exists()
 
 
-def test_mcp_remove_env_var_removes_only_string_entries(workspace, run_cli):
-    """remove-env-var keeps object entries and removes matching string entries."""
+def test_mcp_remove_env_var_and_unset_env_header_update_project_overrides(
+    workspace,
+    run_cli,
+    read_project_config,
+):
+    """Removal commands remove only the requested override values."""
     project, codex_home = workspace
-    write_user_config(
+    run_cli(["setup"], project, codex_home)
+    run_cli(["mcp", "add-env-var", "--no-sync", "browsermcp", "BROWSER_ENV"], project, codex_home)
+    run_cli(["mcp", "set-env-header", "--no-sync", "browsermcp", "Authorization", "AUTH_ENV"], project, codex_home)
+
+    env_exit, _, env_stderr = run_cli(
+        ["mcp", "remove-env-var", "--no-sync", "browsermcp", "BROWSER_ENV"],
+        project,
         codex_home,
-        '''
-[mcp_servers.context7]
-command = "npx"
-env_vars = ["LOCAL_TOKEN", { name = "LOCAL_TOKEN", source = "remote" }]
-''',
     )
+    header_exit, _, header_stderr = run_cli(
+        ["mcp", "unset-env-header", "--no-sync", "browsermcp", "Authorization"],
+        project,
+        codex_home,
+    )
+
+    assert env_exit == 0
+    assert env_stderr == ""
+    assert header_exit == 0
+    assert header_stderr == ""
+    server = read_project_config(project)["mcp"]["servers"]["browsermcp"]
+    assert server["env_vars"] == []
+    assert server["env_http_headers"] == {}
+
+
+def test_mcp_set_field_rejects_unsafe_fields_without_touching_user_config(workspace, run_cli):
+    """set-field cannot write raw env or other unsafe server definition fields."""
+    project, codex_home = workspace
+    run_cli(["setup"], project, codex_home)
 
     exit_code, stdout, stderr = run_cli(
-        ["mcp", "remove-env-var", "context7", "LOCAL_TOKEN"],
-        project,
-        codex_home,
-    )
-
-    assert exit_code == 0
-    assert stderr == ""
-    assert stdout == "Updated MCP server context7 env_vars\n"
-    assert read_user_config(codex_home)["mcp_servers"]["context7"]["env_vars"] == [
-        {"name": "LOCAL_TOKEN", "source": "remote"}
-    ]
-
-
-def test_mcp_set_and_unset_env_header(workspace, run_cli):
-    """env header commands mutate env_http_headers on an existing server."""
-    project, codex_home = workspace
-    write_user_config(
-        codex_home,
-        '''
-[mcp_servers.figma]
-url = "https://mcp.figma.com/mcp"
-''',
-    )
-
-    set_exit, set_stdout, set_stderr = run_cli(
-        ["mcp", "set-env-header", "figma", "X-Figma-Token", "FIGMA_TOKEN"],
-        project,
-        codex_home,
-    )
-    unset_exit, unset_stdout, unset_stderr = run_cli(
-        ["mcp", "unset-env-header", "figma", "X-Figma-Token"],
-        project,
-        codex_home,
-    )
-
-    assert set_exit == 0
-    assert set_stderr == ""
-    assert set_stdout == "Updated MCP server figma env_http_headers\n"
-    assert unset_exit == 0
-    assert unset_stderr == ""
-    assert unset_stdout == "Updated MCP server figma env_http_headers\n"
-    assert read_user_config(codex_home)["mcp_servers"]["figma"]["env_http_headers"] == {}
-
-
-def test_mcp_set_field_updates_allowlisted_toml_values(workspace, run_cli):
-    """set-field parses TOML values for non-secret allowlisted fields."""
-    project, codex_home = workspace
-    write_user_config(
-        codex_home,
-        '''
-[mcp_servers.context7]
-command = "npx"
-''',
-    )
-
-    exit_code, stdout, stderr = run_cli(
-        ["mcp", "set-field", "context7", "enabled_tools", '["search", "open"]'],
-        project,
-        codex_home,
-    )
-
-    assert exit_code == 0
-    assert stderr == ""
-    assert stdout == "Updated MCP server context7 enabled_tools\n"
-    assert read_user_config(codex_home)["mcp_servers"]["context7"]["enabled_tools"] == [
-        "search",
-        "open",
-    ]
-
-
-def test_mcp_set_field_rejects_unknown_or_invalid_fields(workspace, run_cli):
-    """set-field accepts only the documented safe field allowlist."""
-    project, codex_home = workspace
-    write_user_config(
-        codex_home,
-        '''
-[mcp_servers.context7]
-command = "npx"
-''',
-    )
-
-    unknown_exit, _, unknown_err = run_cli(
-        ["mcp", "set-field", "context7", "env", '{TOKEN="raw"}'],
-        project,
-        codex_home,
-    )
-    invalid_exit, _, invalid_err = run_cli(
-        ["mcp", "set-field", "context7", "default_tools_approval_mode", '"always"'],
-        project,
-        codex_home,
-    )
-
-    assert unknown_exit == 1
-    assert "Unsupported MCP field for set-field: env" in unknown_err
-    assert invalid_exit == 1
-    assert "default_tools_approval_mode must be one of auto, prompt, approve" in invalid_err
-    assert "env" not in read_user_config(codex_home)["mcp_servers"]["context7"]
-
-
-def test_mcp_parameter_mutation_missing_server_does_not_create_entry(workspace, run_cli):
-    """Parameter commands fail for absent server ids and do not create entries."""
-    project, codex_home = workspace
-    write_user_config(
-        codex_home,
-        '''
-[mcp_servers.context7]
-command = "npx"
-''',
-    )
-
-    exit_code, stdout, stderr = run_cli(
-        ["mcp", "set-token-env", "missing", "TOKEN"],
+        ["mcp", "set-field", "--no-sync", "browsermcp", "command", '"browsermcp"'],
         project,
         codex_home,
     )
 
     assert exit_code == 1
     assert stdout == ""
-    assert "MCP server not found: missing" in stderr
-    assert sorted(read_user_config(codex_home)["mcp_servers"]) == ["context7"]
+    assert "Unsupported MCP field for set-field: command" in stderr
+    assert not (codex_home / "config.toml").exists()
+
+
+def test_mcp_validate_reports_project_override_warnings(workspace, run_cli):
+    """validate checks project override shape and does not read user config."""
+    project, codex_home = workspace
+    run_cli(["setup"], project, codex_home)
+    (project / ".codex" / "codexmgr.toml").write_text(
+        '''
+[mcp.servers.browsermcp]
+enabled = true
+env = { TOKEN = "raw" }
+''',
+        encoding="utf-8",
+    )
+
+    exit_code, stdout, stderr = run_cli(["mcp", "validate"], project, codex_home)
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert "Valid MCP config: 1 server override" in stdout
+    assert "WARN Unsupported MCP override field preserved nowhere: browsermcp.env" in stdout
+    assert not (codex_home / "config.toml").exists()

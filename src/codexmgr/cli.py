@@ -198,7 +198,7 @@ def _dispatch(
         )
 
     if args.command == "mcp":
-        return run_mcp_command(args, codex_home, stdout)
+        return run_mcp_command(args, cwd, codex_home, codexmgr_home, stdout)
 
     if args.command == "doctor":
         return run_doctor(cwd, codex_home, codexmgr_home, stdout)

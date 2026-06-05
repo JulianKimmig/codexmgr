@@ -1,11 +1,12 @@
 """Manage skill enable and disable lists in project configuration."""
 
+from collections.abc import Mapping, MutableMapping
 from pathlib import Path
 from typing import Any
 
 from .errors import CommandError
 from .paths import codex_config_path, config_path, project_codex_dir
-from .toml_io import load_optional_toml_file, write_toml_file
+from .toml_io import ensure_toml_table, load_optional_toml_file, plain_toml_value, write_toml_file
 
 
 def enable_skill(skill: str, cwd: Path) -> str:
@@ -56,9 +57,11 @@ def build_codex_skill_config(
         return None
 
     codex_config = load_optional_toml_file(codex_config_path(cwd))
-    skills = codex_config.setdefault("skills", {})
-    if not isinstance(skills, dict):
-        raise CommandError(".codex/config.toml [skills] must be a table")
+    skills = ensure_toml_table(
+        codex_config,
+        "skills",
+        ".codex/config.toml [skills] must be a table",
+    )
     skills["config"] = entries
     return codex_config
 
@@ -127,7 +130,7 @@ def _require_codex_dir(cwd: Path) -> Path:
     return codex_dir
 
 
-def _skill_lists(config: dict[str, Any]) -> tuple[list[str], list[str]]:
+def _skill_lists(config: Mapping[str, Any]) -> tuple[list[str], list[str]]:
     """Read enabled and disabled skill lists from project config.
 
     Args:
@@ -137,12 +140,12 @@ def _skill_lists(config: dict[str, Any]) -> tuple[list[str], list[str]]:
         The enabled list and disabled list.
     """
     skills = config.get("skills", {})
-    if not isinstance(skills, dict):
+    if not isinstance(skills, Mapping):
         raise CommandError("codexmgr.toml [skills] must be a table")
     return _string_list(skills, "enabled"), _string_list(skills, "disabled")
 
 
-def _string_list(table: dict[str, Any], key: str) -> list[str]:
+def _string_list(table: Mapping[str, Any], key: str) -> list[str]:
     """Read a string list from a project config table.
 
     Args:
@@ -152,13 +155,17 @@ def _string_list(table: dict[str, Any], key: str) -> list[str]:
     Returns:
         A shallow copy of the configured string list.
     """
-    values = table.get(key, [])
+    values = plain_toml_value(table.get(key, []))
     if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
         raise CommandError(f"codexmgr.toml skills.{key} must be a list of strings")
     return list(values)
 
 
-def _set_skill_lists(config: dict[str, Any], enabled: list[str], disabled: list[str]) -> None:
+def _set_skill_lists(
+    config: MutableMapping[str, Any],
+    enabled: list[str],
+    disabled: list[str],
+) -> None:
     """Write enabled and disabled skill lists into project config.
 
     Args:
@@ -166,9 +173,7 @@ def _set_skill_lists(config: dict[str, Any], enabled: list[str], disabled: list[
         enabled: Skill references to write to skills.enabled.
         disabled: Skill references to write to skills.disabled.
     """
-    skills = config.setdefault("skills", {})
-    if not isinstance(skills, dict):
-        raise CommandError("codexmgr.toml [skills] must be a table")
+    skills = ensure_toml_table(config, "skills", "codexmgr.toml [skills] must be a table")
     skills["enabled"] = enabled
     skills["disabled"] = disabled
 

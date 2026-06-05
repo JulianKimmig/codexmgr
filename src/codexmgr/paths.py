@@ -24,18 +24,6 @@ def global_codexmgr_dir() -> Path:
     return Path(os.environ.get("CODEXMGR_HOME", Path.home() / ".codexmgr"))
 
 
-def global_codex_config_path(codex_home: Path) -> Path:
-    """Return the user-level Codex config path.
-
-    Args:
-        codex_home: Codex home directory.
-
-    Returns:
-        Path to CODEX_HOME/config.toml.
-    """
-    return codex_home / "config.toml"
-
-
 def project_codex_dir(cwd: Path) -> Path:
     """Return the project-local .codex directory path.
 
