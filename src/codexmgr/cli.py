@@ -8,7 +8,7 @@ from typing import TextIO
 from .agentsmd import add_agentsmd, list_agentsmd_options, remove_agentsmd
 from .codex import run_codex
 from .errors import CommandError
-from .navigation import add_cd_arguments, format_codexmgr_home_command
+from .navigation import add_cd_arguments, run_codexmgr_home_action
 from .paths import global_codex_dir, global_codexmgr_dir
 from .project import apply_project_config, setup_project
 from .skills import disable_skill, enable_skill
@@ -167,10 +167,7 @@ def _dispatch(
         return 0
 
     if args.command == "cd":
-        stdout.write(
-            f"{format_codexmgr_home_command(codexmgr_home, args.cd_action)}\n"
-        )
-        return 0
+        return run_codexmgr_home_action(codexmgr_home, args.cd_action, stdout)
 
     if args.command == "codex":
         return run_codex(cwd, args.codex_args)

@@ -160,10 +160,10 @@ codexmgr codex <args...>
 `[skills]` table is configured, and refreshes the generated `AGENTS.md` block
 when `[agents_md]` is configured.
 
-`cd` prints shell code for navigating to `$CODEXMGR_HOME`. Use
-`eval "$(codexmgr cd)"` to change the current shell, `codexmgr cd --path` to
-print only the path, `codexmgr cd --explorer` to print a file-explorer command,
-and `codexmgr cd --terminal` to print a new-terminal command.
+`cd` launches a shell in `$CODEXMGR_HOME`, similar to `chezmoi cd`. Use
+`codexmgr cd --path` to print only the path, `codexmgr cd --explorer` to open
+the directory in a file explorer, and `codexmgr cd --terminal` to open a new
+terminal there.
 
 `agentsmd list` prints the named templates available under
 `$CODEXMGR_HOME/agentsmd` in sorted order.

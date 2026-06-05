@@ -1,8 +1,11 @@
-"""Shell command formatting for codexmgr home navigation."""
+"""Shell launching helpers for codexmgr home navigation."""
 
 import argparse
+import os
+import subprocess
+import sys
 from pathlib import Path
-from shlex import quote
+from typing import TextIO
 
 from .errors import CommandError
 
@@ -35,48 +38,119 @@ def add_cd_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_const",
         const=EXPLORER_ACTION,
         dest="cd_action",
-        help="Print shell code that opens the codexmgr home in a file explorer",
+        help="Open the codexmgr home in a file explorer",
     )
     output.add_argument(
         "--terminal",
         action="store_const",
         const=TERMINAL_ACTION,
         dest="cd_action",
-        help="Print shell code that opens a terminal in the codexmgr home",
+        help="Open a new terminal in the codexmgr home",
     )
 
 
-def format_codexmgr_home_command(codexmgr_home: Path, action: str) -> str:
-    """Format a shell-facing command for a codexmgr home action.
+def run_codexmgr_home_action(
+    codexmgr_home: Path,
+    action: str,
+    stdout: TextIO,
+) -> int:
+    """Run a codexmgr home navigation action.
 
     Args:
         codexmgr_home: codexmgr home directory targeted by the command.
         action: Navigation action to format. Supported values are ``cd``,
             ``path``, ``explorer``, and ``terminal``.
+        stdout: Stream for path output when ``action`` is ``path``.
 
     Returns:
-        Shell-facing text for the requested action. The ``cd`` action is meant
-        to be evaluated by the caller shell so it can affect the current
-        terminal.
+        The launched command exit code, or zero for path output.
     """
-    if action == CD_ACTION:
-        return f"cd {_quote_home(codexmgr_home)}"
     if action == PATH_ACTION:
-        return str(codexmgr_home)
+        stdout.write(f"{codexmgr_home}\n")
+        return 0
+
+    _require_codexmgr_home(codexmgr_home)
+    if action == CD_ACTION:
+        return _run_external_command(_current_shell_command(), codexmgr_home)
     if action == EXPLORER_ACTION:
-        return f"xdg-open {_quote_home(codexmgr_home)}"
+        return _run_external_command(_file_explorer_command(codexmgr_home), None)
     if action == TERMINAL_ACTION:
-        return f"x-terminal-emulator --working-directory {_quote_home(codexmgr_home)}"
+        return _run_external_command(_terminal_command(codexmgr_home), None)
     raise CommandError(f"Unsupported codexmgr home action: {action}")
 
 
-def _quote_home(codexmgr_home: Path) -> str:
-    """Quote a codexmgr home path for POSIX-compatible shells.
+def _require_codexmgr_home(codexmgr_home: Path) -> None:
+    """Require that the codexmgr home exists before launching into it.
 
     Args:
-        codexmgr_home: codexmgr home directory to quote.
+        codexmgr_home: codexmgr home directory to validate.
 
     Returns:
-        The directory path quoted for safe shell interpolation.
+        None. A ``CommandError`` is raised when the path is not a directory.
     """
-    return quote(str(codexmgr_home))
+    if not codexmgr_home.is_dir():
+        raise CommandError(f"codexmgr home not found: {codexmgr_home}")
+
+
+def _current_shell_command() -> list[str]:
+    """Build the current-terminal shell command.
+
+    Returns:
+        Command argv for launching the configured shell.
+    """
+    shell = os.environ.get("SHELL") or os.environ.get("COMSPEC")
+    if not shell:
+        raise CommandError("Shell not configured: set SHELL or COMSPEC")
+    return [shell]
+
+
+def _file_explorer_command(codexmgr_home: Path) -> list[str]:
+    """Build the platform file-explorer command.
+
+    Args:
+        codexmgr_home: codexmgr home directory to open.
+
+    Returns:
+        Command argv for opening the directory in a file explorer.
+    """
+    if sys.platform == "darwin":
+        return ["open", str(codexmgr_home)]
+    if sys.platform == "win32":
+        return ["explorer", str(codexmgr_home)]
+    if sys.platform.startswith("linux"):
+        return ["xdg-open", str(codexmgr_home)]
+    raise CommandError(f"File explorer command not configured for {sys.platform}")
+
+
+def _terminal_command(codexmgr_home: Path) -> list[str]:
+    """Build the platform new-terminal command.
+
+    Args:
+        codexmgr_home: codexmgr home directory to use as terminal cwd.
+
+    Returns:
+        Command argv for opening a new terminal in the directory.
+    """
+    if sys.platform == "darwin":
+        return ["open", "-a", "Terminal", str(codexmgr_home)]
+    if sys.platform == "win32":
+        return ["wt", "-d", str(codexmgr_home)]
+    if sys.platform.startswith("linux"):
+        return ["x-terminal-emulator", "--working-directory", str(codexmgr_home)]
+    raise CommandError(f"Terminal command not configured for {sys.platform}")
+
+
+def _run_external_command(command: list[str], cwd: Path | None) -> int:
+    """Run an external navigation command.
+
+    Args:
+        command: Command argv to run.
+        cwd: Optional working directory for the launched process.
+
+    Returns:
+        The external command exit code.
+    """
+    try:
+        return subprocess.run(command, cwd=cwd).returncode
+    except FileNotFoundError as exc:
+        raise CommandError(f"Command not found: {command[0]}") from exc
