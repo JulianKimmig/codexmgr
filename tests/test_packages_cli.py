@@ -396,7 +396,7 @@ def test_package_enable_rejects_invalid_package_schema(
     """package enable rejects supported keys that are not string lists."""
     project, codex_home = workspace
     codexmgr_home = codex_home.parent / "codexmgr-home"
-    _write_package(codexmgr_home, "bad", 'hooks = "repo-rules"\n')
+    package_config = _write_package(codexmgr_home, "bad", 'hooks = "repo-rules"\n')
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
 
     exit_code, stdout, stderr = run_cli_with_homes(
@@ -408,7 +408,7 @@ def test_package_enable_rejects_invalid_package_schema(
 
     assert exit_code == 1
     assert stdout == ""
-    assert "packages/bad/config.toml hooks must be a list of strings" in stderr
+    assert f"{package_config} hooks must be a list of strings" in stderr
 
 
 def test_package_enable_rejects_unknown_package_keys(

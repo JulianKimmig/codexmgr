@@ -5,7 +5,21 @@ import tomllib
 from types import SimpleNamespace
 
 from codexmgr.commands.codex import build_codex_command
+from codexmgr.core.toml_io import format_toml_value
 from codexmgr.interface.cli import main
+
+
+def _format_config_override(key, value):
+    """Format a Codex -c override with production TOML escaping.
+
+    Args:
+        key: Dotted Codex config key.
+        value: Python value to serialize as TOML.
+
+    Returns:
+        Complete key=value override string.
+    """
+    return f"{key}={format_toml_value(value)}"
 
 
 def test_build_codex_command_includes_configured_skills(workspace):
@@ -202,7 +216,10 @@ enabled = ["example"]
         "command": [
             "codex",
             "-c",
-            f'skills.config=[{{path="{skill_file.resolve()}", enabled=true}}]',
+            _format_config_override(
+                "skills.config",
+                [{"path": str(skill_file.resolve()), "enabled": True}],
+            ),
             "exec",
             "hello",
         ],
@@ -310,8 +327,13 @@ skills = ["strict-skill"]
     assert captured["command"] == [
         "codex",
         "-c",
-        f'skills.config=[{{path="{base_skill.resolve()}", enabled=true}}, '
-        f'{{path="{strict_skill.resolve()}", enabled=true}}]',
+        _format_config_override(
+            "skills.config",
+            [
+                {"path": str(base_skill.resolve()), "enabled": True},
+                {"path": str(strict_skill.resolve()), "enabled": True},
+            ],
+        ),
         "exec",
         "hello",
     ]
