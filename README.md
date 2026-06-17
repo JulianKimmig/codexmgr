@@ -1,25 +1,30 @@
 # codexmgr
 
-`codexmgr` centralizes reusable Codex project setup. It lets you keep shared
-`AGENTS.md` snippets, skills, hooks, custom agents, rule files, packages, and
-safe MCP overrides in one manager home, then sync the selected pieces into each
-project from a small `.codex/codexmgr.toml` file.
+`codexmgr` manages reusable Codex project setup. Keep shared `AGENTS.md`
+snippets, skills, hooks, custom agents, rule files, packages, and safe MCP
+overrides in one manager home, then sync the selected pieces into each project
+from `.codex/codexmgr.toml`.
 
-I built it because I use Codex in many different projects and got tired of
-manually assembling `AGENTS.md` every time. When I improved a rule in one
-project, I also had to remember to copy that update into every other project.
-This workflow makes agent rules and snippets reusable, centralized, and still
-project-specific where needed.
+The tool is for people who use Codex in several repositories and do not want to
+copy the same agent instructions by hand. When a shared rule changes, update it
+once in `$CODEXMGR_HOME` and apply it wherever that project has opted in.
 
-Use `codexmgr` when you want to:
+Use `codexmgr` when a project should:
 
-- compose project `AGENTS.md` files from reusable instruction fragments
-- keep shared rules, skills, hooks, and custom agents available across projects
-- bundle common Codex setup as packages and profiles
-- manage project-local MCP enablement without editing the user Codex config
-- check whether generated Codex files are in sync
-- run `codex` with project `.codex/config.toml` values translated into `-c`
-  overrides
+- build `AGENTS.md` from reusable instruction snippets
+- share skills, hooks, custom agents, and rule files across repositories
+- enable packaged Codex setups made from those reusable pieces
+- keep project MCP overrides out of the user-level Codex config
+- check whether generated Codex files match the project config
+- run `codex` with project `.codex/config.toml` values passed as `-c` overrides
+
+The basic model has three parts:
+
+- `$CODEXMGR_HOME` stores reusable inputs; when unset it defaults to
+  `~/.codexmgr`
+- `.codex/codexmgr.toml` records what the current project wants to use
+- `codexmgr apply` resolves the selected inputs and writes the project files
+  Codex reads
 
 ## Requirements
 
@@ -28,20 +33,21 @@ Use `codexmgr` when you want to:
 
 ## Install
 
-Install `codexmgr` as a command-line tool from the published Python package.
-`pipx` keeps the tool isolated from project environments:
+Install `codexmgr` as a command-line tool from the Python package. `pipx` is
+the recommended persistent install because it keeps the tool isolated from
+project environments:
 
 ```bash
 pipx install codexmgr
 ```
 
-If you use `uv` for tools:
+If you use `uv` for command-line tools:
 
 ```bash
 uv tool install codexmgr
 ```
 
-Plain `pip` also works, preferably inside an environment you control:
+Plain `pip` also works inside an environment you control:
 
 ```bash
 python -m pip install codexmgr
@@ -55,24 +61,32 @@ codexmgr --help
 
 ## Quick Start
 
-In a project that should use shared Codex configuration, initialize
-`codexmgr`:
+Start inside the project that should receive Codex configuration.
 
 ```bash
 codexmgr setup
 ```
 
-Create or install an `AGENTS.md` snippet under
-`$CODEXMGR_HOME/agentsmd/<name>.toml`. If `CODEXMGR_HOME` is unset,
-`codexmgr` uses `~/.codexmgr`.
+`setup` creates `.codex/`, creates `.codex/codexmgr.toml` if it is missing, and
+runs `apply`. Existing project config is preserved.
+
+Create a reusable `AGENTS.md` snippet in the manager home. This command creates
+`$CODEXMGR_HOME/agentsmd/coding.toml` and refuses to overwrite an existing file:
+
+```bash
+codexmgr init-template agentsmd coding
+```
+
+You can also write the snippet yourself. A snippet is a TOML template whose
+tables become Markdown headings in `AGENTS.md`:
 
 ```toml
+# ~/.codexmgr/agentsmd/coding.toml
 [coding]
 text = """
 - Keep source files focused and small.
 - Add tests for behavior changes before implementation.
 """
-
 [coding.debugging]
 text = "Prefer lasting regression tests over temporary scripts."
 ```
@@ -86,32 +100,40 @@ codexmgr agentsmd add coding
 This updates `.codex/codexmgr.toml`, runs `apply`, writes
 `.codex/codexmgr.lock`, and refreshes the managed block in `AGENTS.md`.
 
-To preview or validate a snippet before adding it:
+Preview or validate a snippet when you want to check it before adding it:
 
 ```bash
 codexmgr agentsmd show coding
 codexmgr agentsmd validate coding
 ```
 
+Check what the project is using after changes:
+
+```bash
+codexmgr status
+codexmgr doctor
+codexmgr apply --check
+```
+
 ## Managed Files
 
-`codexmgr` reads and writes these project files:
+The project source of truth is `.codex/codexmgr.toml`. CLI commands edit this
+file for you, and you can also edit it by hand when that is clearer.
 
-- `.codex/codexmgr.toml`: source configuration edited by CLI commands or by
-  hand
-- `.codex/codexmgr.lock`: resolved template, agent, skill, hook, and MCP state
-  written by `apply`
-- `.codex/config.toml`: Codex config updated with `[[skills.config]]` entries
-  and `[mcp_servers.<id>]` overrides
-- `.codex/hooks.json`: Codex hook config updated with enabled reusable hook
-  bundles while preserving unmanaged local hooks
-- `.codex/hooks/<name>`: project-local copies of enabled hook bundle support
-  files
-- `.codex/agents/<name>.toml`: project-local copies of enabled custom agents
-- `.rules/<path>`: project-local copies of enabled reusable rule files
-- `AGENTS.md`: project instructions, with only the managed block replaced
+`apply` resolves the source config and may write or update these managed files:
 
-The managed AGENTS.md block is:
+- `.codex/codexmgr.lock`: resolved AGENTS.md, agent, skill, hook, rule, and MCP
+  state
+- `.codex/config.toml`: project-local Codex config, including generated
+  `[[skills.config]]` entries and `[mcp_servers.<id>]` overrides
+- `.codex/hooks.json`: generated hook config for enabled reusable hook bundles
+- `.codex/hooks/<name>`: copied support files for enabled hook bundles
+- `.codex/agents/<name>.toml`: copied custom-agent definitions
+- `.agents/skills/<name>`: copied manager-home skills
+- `.rules/<path>`: copied reusable rule files
+- `AGENTS.md`: project instructions with only the generated block replaced
+
+The managed `AGENTS.md` block is:
 
 ```markdown
 <!-- BEGIN CODEXMGR GENERATED -->
@@ -123,69 +145,83 @@ Manual content outside this block is preserved. If the block is missing,
 
 ## Project Configuration
 
-`.codex/codexmgr.toml` supports AGENTS.md templates, custom-agent state, skill
-state, hook state, and MCP overrides:
+`.codex/codexmgr.toml` can opt into each resource type independently. A minimal
+file may only contain `[agents_md]`; larger projects can add skills, custom
+agents, hooks, reusable rules, and MCP overrides as needed. Package commands
+write those same tables rather than a separate package table.
 
 ```toml
 [agents_md]
 src = ["coding", "/absolute/or/project-relative/template.toml"]
-
 [skills]
 enabled = ["review-helper"]
 disabled = ["experimental-skill", "skills/local-disabled"]
-
 [agents]
 enabled = ["rule-retriever"]
 disabled = ["experimental-agent"]
-
 [hooks]
 enabled = ["repo-rules"]
 disabled = ["experimental-hook"]
-
 [rules]
 enabled = ["react/", "python/testing.md"]
 disabled = ["react/materials/"]
-
 [mcp.servers.browsermcp]
 enabled = true
 bearer_token_env_var = "BROWSERMCP_TOKEN"
 env_vars = ["BROWSER_ENV"]
 ```
 
-Named AGENTS.md templates resolve from `$CODEXMGR_HOME/agentsmd/<name>.toml`.
-Path-like template values resolve relative to the project unless they are
-absolute paths.
+Mutating commands run `apply` automatically unless `--no-sync` is passed. If
+you edit `.codex/codexmgr.toml` by hand, run `codexmgr apply` or
+`codexmgr apply --check` afterwards.
+
+## Reference Resolution
+
+Named `AGENTS.md` snippets resolve from
+`$CODEXMGR_HOME/agentsmd/<name>.toml`. Path-like snippet values resolve
+relative to the project unless they are absolute paths.
 
 Named skills resolve from `$CODEXMGR_HOME/skills/<name>/SKILL.md` or
-`$CODEX_HOME/skills/<name>/SKILL.md`; duplicate names across distinct homes
-fail. Enabled CODEXMGR_HOME skills are copied into `.agents/skills/<name>` on
-every apply by overlaying source files while preserving extra local files.
-Path-like skill values resolve to either a `SKILL.md` file or a directory
-containing `SKILL.md`. Missing skills are written as name-based entries so Codex
-can resolve them later.
+`$CODEX_HOME/skills/<name>/SKILL.md`. Duplicate names across distinct homes
+fail so the selected skill is not ambiguous.
+
+Enabled skills from `$CODEXMGR_HOME` are copied into `.agents/skills/<name>` on
+every apply. The copy overlays source files while preserving extra local files.
+Path-like skill values can point to a `SKILL.md` file or a directory containing
+`SKILL.md`.
+
+Missing skills are still written as name-based entries. That lets Codex resolve
+them later from another installed skill source.
 
 Named custom agents resolve from `$CODEXMGR_HOME/agents/<name>.toml`. Enabled
-agents are copied into `.codex/agents/<name>.toml` on every apply. Disabled
-agents remove their managed copy only when the lock records the file as
-codexmgr-managed.
+agents are copied into `.codex/agents/<name>.toml`; disabled agents remove the
+managed copy only when the lock records it as codexmgr-managed.
 
 Named hooks resolve from `$CODEXMGR_HOME/hooks/<name>/hooks.json`. Enabled hook
-bundles are merged into `.codex/hooks.json` on every apply with
-`codexmanager_meta` added to each managed handler. Existing unmanaged hooks are
-preserved. Bundle files other than the root `hooks.json` are copied into
-`.codex/hooks/<name>`.
+bundles are merged into `.codex/hooks.json`, and existing unmanaged hooks are
+preserved.
 
-Rule refs resolve under `$CODEXMGR_HOME/rules/` and are POSIX-style relative
-paths. Folder refs are stored with a trailing slash and copy all regular files
-recursively into `.rules/` while preserving relative paths. File refs copy one
-file. Extensionless refs prefer an existing `<ref>.md`. Enabled refs expand
-first, then disabled file or folder refs remove entries from that candidate set.
-First-time applies refuse to overwrite unmanaged `.rules/...` files.
+Hook bundle files other than the root `hooks.json` are copied into
+`.codex/hooks/<name>`. Managed hook handlers receive `codexmanager_meta` so
+future applies can distinguish them from local hooks.
 
-Packaged configurations resolve from
-`$CODEXMGR_HOME/packages/<name>/config.toml`. A package config is a TOML
-document that can contain root `agentsmd`, `agents`, `hooks`, `skills`, and `rules`
-string lists plus optional profile tables:
+Rule refs resolve under `$CODEXMGR_HOME/rules/` and use POSIX-style relative
+paths. Folder refs have a trailing slash and copy regular files recursively into
+`.rules/` while preserving relative paths.
+
+File rule refs copy one file. Extensionless refs prefer an existing `<ref>.md`.
+Enabled refs expand first, then disabled file or folder refs remove entries from
+that candidate set.
+
+First-time rule applies refuse to overwrite unmanaged `.rules/...` files. This
+keeps existing project-local rules from being replaced accidentally.
+
+## Packages
+
+Packages are reusable bundles of snippets, agents, hooks, skills, and rules.
+They resolve from `$CODEXMGR_HOME/packages/<name>/config.toml`.
+
+A package config is a TOML document with root lists and optional profile tables:
 
 ```toml
 agentsmd = []
@@ -193,7 +229,6 @@ agents = ["rule-retriever"]
 hooks = ["repo-rules"]
 skills = ["repo-rule-manager"]
 rules = ["react/"]
-
 [profiles.strict]
 agentsmd = ["strict-coding"]
 agents = ["strict-agent"]
@@ -202,16 +237,18 @@ skills = ["strict-review"]
 rules = ["python/testing.md"]
 ```
 
-`codexmgr package enable <name>` validates package AGENTS.md and hook
-references, then updates `.codex/codexmgr.toml` as if the corresponding
-`agentsmd add`, `hooks enable`, and `skill enable` commands had been run.
-`codexmgr package disable <name>` removes package AGENTS.md entries when
-present and disables the package skills, hooks, agents, and rules.
+`codexmgr package enable <name>` validates enabled package sources, then updates
+`.codex/codexmgr.toml` as if the corresponding resource commands had been run.
 
-Package profiles are merged with the root package entries:
+`codexmgr package disable <name>` removes package `AGENTS.md` entries when
+present and disables the package skills, hooks, agents, and rules. Package state
+is not tracked separately; the resulting project config tables remain the
+source of truth.
+
+Profiles are merged with the root package entries:
 
 ```bash
-codexmgr package enable repo-rules --profile strict coding --profile python
+codexmgr package enable repo-rules --profile strict python
 ```
 
 Direct mutating commands also accept batch targets, for example:
@@ -223,21 +260,21 @@ codexmgr hooks enable repo-rules audit
 codexmgr mcp enable browsermcp context7
 ```
 
-Mutating commands run `apply` automatically unless `--no-sync` is passed.
-Project guidelines require `apply` whenever `.codex/codexmgr.toml` changes,
-unless `--no-sync` was explicitly requested.
+These commands run `apply` automatically unless `--no-sync` is passed.
 
 ## Interactive TUI
 
-`codexmgr tui` opens a Textual-based terminal UI for managing project-local
-configuration. It shows AGENTS.md templates, skills, hooks, custom agents,
-rules, packages, and MCP server enable overrides in selectable lists. Changes are
-staged in memory while you navigate and toggle entries. Press `s` to save; the
-save writes `.codex/codexmgr.toml` once and runs `apply` once unless
-`--no-sync` was used.
+`codexmgr tui` opens a Textual-based terminal UI for project-local
+configuration. It shows `AGENTS.md` snippets, skills, hooks, custom agents,
+rules, packages, and MCP server enable overrides in selectable lists.
+
+Changes are staged in memory while you navigate. Press `s` to save; the save
+writes `.codex/codexmgr.toml` once and runs `apply` once unless `--no-sync` was
+used.
+
 For resources with explicit enable and disable lists, `space` cycles the
-highlighted row through available, enabled, and disabled states.
-Package profiles appear as separate selectable rows under their package.
+highlighted row through available, enabled, and disabled states. Package
+profiles appear as separate selectable rows under their package.
 
 ```bash
 codexmgr tui
@@ -247,9 +284,11 @@ codexmgr tui --show-diff
 
 The dashboard shows generated-file sync state. By default it lists stale
 generated paths; with `--show-diff`, it shows unified diffs for the staged
-configuration. MCP editing in the TUI is intentionally limited to the
-project-local `enabled` override. Advanced MCP fields remain available through
-the classic `codexmgr mcp ...` commands.
+configuration.
+
+MCP editing in the TUI is intentionally limited to the project-local `enabled`
+override. Advanced MCP fields remain available through the `codexmgr mcp ...`
+commands.
 
 ## Template Format
 
@@ -260,41 +299,88 @@ under that heading. Nested tables become nested headings.
 ```toml
 [coding]
 text = "Top-level guidance."
-
 [coding.tests]
 text = "Test behavior, not implementation details."
 ```
 
-renders as:
-
-```markdown
-# coding
-Top-level guidance.
-
-## tests
-Test behavior, not implementation details.
-```
+This example renders a top-level `# coding` section with a nested `## tests`
+section below it.
 
 Unsupported scalar entries fail loudly instead of being silently ignored. This
 keeps template mistakes visible during `apply`.
 
-## Commands
+## Command Reference
+
+Project lifecycle commands:
 
 ```bash
 codexmgr setup
 codexmgr apply
 codexmgr apply --check
 codexmgr apply --diff
-codexmgr cd [--path | --explorer | --terminal]
 codexmgr doctor
 codexmgr status
-codexmgr tui [--no-sync] [--show-diff]
+```
+
+`setup` creates `.codex/`, creates `.codex/codexmgr.toml` if missing, then runs
+`apply`.
+
+`apply` reads `.codex/codexmgr.toml`, resolves configured sources, writes
+managed project files, and refreshes generated state.
+
+`apply --check` exits with a failure if generated files are out of sync without
+writing them. `apply --diff` also avoids writing and prints unified diffs for
+the expected generated-file changes.
+
+`doctor` checks project setup, home environment variables, project TOML syntax,
+referenced snippets, enabled skills, enabled custom agents, enabled hook
+bundles, enabled rules, and stale generated files.
+
+`status` prints the resolved homes, configured snippets, skills, custom agents,
+hooks, rules, and whether generated files are in sync.
+
+Manager-home navigation:
+
+```bash
+codexmgr cd
+codexmgr cd --path
+codexmgr cd --explorer
+codexmgr cd --terminal
+```
+
+`cd` launches a shell in `$CODEXMGR_HOME`. The flags print the path, open a file
+explorer, or open a new terminal there.
+
+AGENTS.md snippet commands:
+
+```bash
 codexmgr agentsmd list
 codexmgr agentsmd show <name-or-template-path>
 codexmgr agentsmd validate <name-or-template-path>
 codexmgr agentsmd add [--no-sync] <name-or-template-path> [...]
 codexmgr agentsmd remove [--no-sync] <name-or-template-path> [...]
 codexmgr init-template agentsmd <name>
+```
+
+`agentsmd list` prints named templates from `$CODEXMGR_HOME/agentsmd` in sorted
+order.
+
+`agentsmd show` renders one template as `AGENTS.md` markdown without changing
+project configuration. `agentsmd validate` loads and renders a template to catch
+TOML or template-shape errors before adding it.
+
+`agentsmd add` validates that the template exists before writing config.
+Repeated adds keep one source entry.
+
+`agentsmd remove` removes configured template sources and fails if a requested
+source is not present.
+
+`init-template agentsmd` creates a starter template under
+`$CODEXMGR_HOME/agentsmd` and refuses to overwrite an existing template.
+
+Shared resource commands:
+
+```bash
 codexmgr skill list
 codexmgr skill enable [--no-sync] <name-or-skill-path> [...]
 codexmgr skill disable [--no-sync] <name-or-skill-path> [...]
@@ -307,56 +393,50 @@ codexmgr hooks disable [--no-sync] <hook-name> [...]
 codexmgr rules list
 codexmgr rules enable [--no-sync] <rule-ref> [...]
 codexmgr rules disable [--no-sync] <rule-ref> [...]
+```
+
+`skill list`, `agents list`, `hooks list`, and `rules list` print available
+resources and mark configured entries as enabled, disabled, or missing.
+
+Enable commands validate manager-home sources when the source type must already
+exist. Enable and disable lists stay mutually exclusive, and repeated commands
+keep one entry.
+
+Rules have one exception to exact mutual exclusion: a parent folder enable and a
+child file or folder disable can intentionally coexist.
+
+Package commands:
+
+```bash
 codexmgr package list
 codexmgr package enable [--no-sync] <package-name> [...] [--profile <name> [...]]
 codexmgr package disable [--no-sync] <package-name> [...] [--profile <name> [...]]
-codexmgr mcp list
-codexmgr mcp show <server-id>
-codexmgr mcp validate
-codexmgr mcp enable [--no-sync] <server-id> [...]
-codexmgr mcp disable [--no-sync] <server-id> [...]
-codexmgr mcp set-token-env [--no-sync] <server-id> <ENV_VAR>
-codexmgr mcp add-env-var [--no-sync] <server-id> <ENV_VAR>
-codexmgr mcp remove-env-var [--no-sync] <server-id> <ENV_VAR>
-codexmgr mcp set-env-header [--no-sync] <server-id> <HEADER> <ENV_VAR>
-codexmgr mcp unset-env-header [--no-sync] <server-id> <HEADER>
-codexmgr mcp set-field [--no-sync] <server-id> <field> <toml-value>
+```
+
+`package list` prints available `$CODEXMGR_HOME/packages/*/config.toml` entries
+in sorted order.
+
+`package enable` and `package disable` proxy to the underlying AGENTS.md,
+custom-agent, skill, hook, and rule project-config mutations.
+
+Codex wrapper command:
+
+```bash
 codexmgr codex <args...>
 ```
 
-`setup` creates `.codex/` in the current project.
+`codexmgr codex` applies the current project config, flattens
+`.codex/config.toml` into `-c key=value` overrides, and forwards the remaining
+arguments to the real `codex` command.
 
-`apply` reads `.codex/codexmgr.toml`, resolves configured sources, writes
-`.codex/codexmgr.lock`, updates `.codex/config.toml` skill entries when a
-`[skills]` table is configured, copies `.codex/agents/<name>.toml` files when
-`[agents]` is configured, writes `.codex/hooks.json` when `[hooks]` is
-configured, copies `.rules/<path>` files when `[rules]` is configured, writes
-local `[mcp_servers.<id>]` overrides when `[mcp]` is
-configured, and refreshes the generated `AGENTS.md` block when `[agents_md]` is
-configured.
+User-provided `-c` or `--config` overrides are merged after project config.
+Scalar values replace earlier values, while list values append.
 
-`apply --check` exits with a failure if generated files are out of sync without
-writing them. `apply --diff` also avoids writing and prints unified diffs for
-the expected generated-file changes.
-
-`cd` launches a shell in `$CODEXMGR_HOME`. Use
-`codexmgr cd --path` to print only the path, `codexmgr cd --explorer` to open
-the directory in a file explorer, and `codexmgr cd --terminal` to open a new
-terminal there.
-
-`doctor` checks project setup, home environment variables, project TOML syntax,
-referenced snippets, enabled skills, enabled custom agents, enabled hook
-bundles, enabled rules, and stale generated files.
-
-`status` prints the resolved homes, configured snippets, skills, custom agents,
-hooks, rules, and whether generated files are in sync.
-
-`codexmgr codex` can run with a just-in-time package/profile overlay without
-changing `.codex/codexmgr.toml`. Put Codex arguments after `--` when using this
-syntax:
+The wrapper can run with a just-in-time package/profile overlay without changing
+`.codex/codexmgr.toml`. Put Codex arguments after `--` when using this syntax:
 
 ```bash
-codexmgr codex repo-rules --profile strict coding --profile python -- exec "review this"
+codexmgr codex --package repo-rules --profile strict python -- exec "review this"
 ```
 
 ## Project MCP Overrides
@@ -419,57 +499,6 @@ Literal API token writes are intentionally not part of this command surface;
 prefer environment variable references such as `bearer_token_env_var`,
 `env_vars`, and `env_http_headers`.
 
-`agentsmd list` prints the named templates available under
-`$CODEXMGR_HOME/agentsmd` in sorted order.
-
-`agentsmd show` renders one template as AGENTS.md markdown without changing the
-project configuration. `agentsmd validate` loads and renders a template to catch
-TOML or template-shape errors before adding it.
-
-`agentsmd add` validates that the template exists before writing config.
-Repeated adds keep one source entry.
-
-`agentsmd remove` removes a configured template source and fails if the source
-is not present.
-
-`init-template agentsmd` creates a starter template under
-`$CODEXMGR_HOME/agentsmd` and refuses to overwrite an existing template.
-
-`skill list` prints available `$CODEXMGR_HOME/skills/*/SKILL.md`,
-`$CODEX_HOME/skills/*/SKILL.md`, and local `.agents/skills/*/SKILL.md` entries
-and marks configured skills as enabled, disabled, or missing.
-
-`skill enable` and `skill disable` keep enabled and disabled lists mutually
-exclusive. Repeated commands keep one entry.
-
-`hooks list` prints available `$CODEXMGR_HOME/hooks/*/hooks.json` entries and
-marks configured hook bundles as enabled, disabled, or missing.
-
-`hooks enable` validates that the named hook bundle exists before writing
-config. `hooks enable` and `hooks disable` keep enabled and disabled lists
-mutually exclusive. Repeated commands keep one entry.
-
-`rules list` prints available `$CODEXMGR_HOME/rules/**` files and folders and
-marks configured rule refs as enabled, disabled, or missing.
-
-`rules enable` validates and canonicalizes refs before writing config.
-`rules disable` canonicalizes existing refs and permits missing exclusions.
-Enabled and disabled lists are exact-ref mutually exclusive, so parent enables
-and child disables can intentionally coexist.
-
-`package list` prints available `$CODEXMGR_HOME/packages/*/config.toml`
-entries in sorted order.
-
-`package enable` and `package disable` proxy to existing AGENTS.md, custom-agent,
-skill, hook, and rule project-config mutations. Package state is not tracked
-separately; the resulting `[agents_md]`, `[agents]`, `[skills]`, `[hooks]`, and `[rules]`
-tables remain the source of truth.
-
-`codex` forwards arguments to the real `codex` command. Values from
-`.codex/config.toml` are flattened into `-c key=value` overrides. User-provided
-`-c` or `--config` overrides are merged after project config: scalar values
-replace earlier values, while list values append.
-
 ## Development
 
 Use a checkout when developing `codexmgr` itself.
@@ -496,7 +525,7 @@ The package is typed (`py.typed`) and the test suite covers CLI behavior,
 template rendering, TOML writing, skill resolution, generated-file sync checks,
 Codex command generation, home-directory resolution, and package metadata.
 
-## Release Notes
+## Release Process
 
 The GitHub workflow runs the test matrix on Python 3.11, 3.12, and 3.13 across
 Linux, Windows, and macOS. The publish workflow builds and publishes to PyPI
