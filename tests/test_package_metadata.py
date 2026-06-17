@@ -19,3 +19,11 @@ def test_package_includes_pep_561_typed_marker():
     typed_marker = importlib.resources.files("codexmgr").joinpath("py.typed")
 
     assert typed_marker.is_file()
+
+
+def test_project_metadata_includes_repository_url():
+    """The package metadata points users to the source repository."""
+    with open("pyproject.toml", "rb") as pyproject_file:
+        project = tomllib.load(pyproject_file)["project"]
+
+    assert project["urls"]["Repository"] == "https://github.com/JulianKimmig/codexmgr/"

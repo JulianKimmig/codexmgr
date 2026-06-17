@@ -21,6 +21,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 
+[project.urls]
+Repository = "https://github.com/JulianKimmig/codexmgr/"
+
 [project.scripts]
 codexmgr = "codexmgr.interface.cli:entrypoint"
 
