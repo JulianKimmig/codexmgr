@@ -7,7 +7,7 @@ from typing import Callable
 
 import pytest
 
-from codexmgr.cli import main
+from codexmgr.interface.cli import main
 
 BEGIN = "<!-- BEGIN CODEXMGR GENERATED -->"
 END = "<!-- END CODEXMGR GENERATED -->"

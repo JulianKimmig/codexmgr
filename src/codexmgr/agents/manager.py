@@ -3,18 +3,18 @@
 from pathlib import Path
 from typing import Any
 
-from .agents_file import write_managed_agents_md
-from .errors import CommandError
-from .options import list_toml_options
-from .paths import agents_md_path, config_path, resolve_template
-from .project_config import (
+from .file import write_managed_agents_md
+from .renderer import render_agents_markdown
+from ..core.errors import CommandError
+from ..core.options import list_toml_options
+from ..core.paths import agents_md_path, config_path, resolve_template
+from ..core.toml_io import load_optional_toml_file, load_toml_file, write_toml_file
+from ..project.config import (
     agents_md_sources,
     load_required_project_config,
     require_codex_dir,
     set_agents_md_sources,
 )
-from .renderer import render_agents_markdown
-from .toml_io import load_optional_toml_file, load_toml_file, write_toml_file
 
 
 def add_agentsmd(reference: str, cwd: Path, codexmgr_home: Path) -> str:

@@ -4,9 +4,14 @@ from collections.abc import Mapping, MutableMapping
 from pathlib import Path
 from typing import Any
 
-from .errors import CommandError
-from .paths import codex_config_path, config_path, project_codex_dir
-from .toml_io import ensure_toml_table, load_optional_toml_file, plain_toml_value, write_toml_file
+from ..core.errors import CommandError
+from ..core.paths import codex_config_path, config_path, project_codex_dir
+from ..core.toml_io import (
+    ensure_toml_table,
+    load_optional_toml_file,
+    plain_toml_value,
+    write_toml_file,
+)
 
 
 def enable_skill(skill: str, cwd: Path) -> str:

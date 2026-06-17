@@ -5,7 +5,7 @@ from difflib import unified_diff
 from pathlib import Path
 from typing import TextIO
 
-from .project import build_project_files
+from .apply import build_project_files
 
 
 @dataclass(frozen=True)

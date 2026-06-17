@@ -2,8 +2,8 @@
 
 import pytest
 
-from codexmgr.errors import CommandError
-from codexmgr.toml_io import dump_toml
+from codexmgr.core.errors import CommandError
+from codexmgr.core.toml_io import dump_toml
 
 
 def test_dump_toml_preserves_empty_nested_tables():

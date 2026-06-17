@@ -4,9 +4,9 @@ import argparse
 from pathlib import Path
 from typing import TextIO
 
-from . import mcp
-from .mcp_discovery import available_state, discover_codex_servers
-from .project import apply_project_config
+from . import config as mcp
+from .discovery import available_state, discover_codex_servers
+from ..project.apply import apply_project_config
 
 
 def run_mcp_command(

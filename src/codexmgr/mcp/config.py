@@ -4,22 +4,22 @@ from collections.abc import Callable, Mapping, MutableMapping
 from pathlib import Path
 from typing import Any
 
-from .errors import CommandError
-from .mcp_fields import (
+from .fields import (
     SET_FIELD_NAMES,
     parse_value,
     unsupported_field_warnings,
     validate_field,
     validate_override,
 )
-from .paths import config_path
-from .project_config import require_codex_dir
-from .toml_io import (
+from ..core.errors import CommandError
+from ..core.paths import config_path
+from ..core.toml_io import (
     ensure_toml_table,
     load_optional_toml_file,
     plain_toml_value,
     write_toml_file,
 )
+from ..project.config import require_codex_dir
 
 Mutation = Callable[[MutableMapping[str, Any]], None]
 

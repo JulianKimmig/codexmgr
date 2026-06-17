@@ -6,9 +6,9 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .errors import CommandError
-from .paths import codex_config_path
-from .toml_io import format_toml_value, load_optional_toml_file
+from ..core.errors import CommandError
+from ..core.paths import codex_config_path
+from ..core.toml_io import format_toml_value, load_optional_toml_file
 
 
 def run_codex(cwd: Path, codex_args: list[str]) -> int:

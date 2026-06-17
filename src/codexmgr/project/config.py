@@ -4,9 +4,9 @@ from collections.abc import Mapping, MutableMapping
 from pathlib import Path
 from typing import Any
 
-from .errors import CommandError
-from .paths import config_path, project_codex_dir
-from .toml_io import ensure_toml_table, load_toml_file
+from ..core.errors import CommandError
+from ..core.paths import config_path, project_codex_dir
+from ..core.toml_io import ensure_toml_table, load_toml_file
 
 
 def require_codex_dir(cwd: Path) -> Path:

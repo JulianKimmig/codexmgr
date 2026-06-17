@@ -3,8 +3,8 @@
 import io
 from types import SimpleNamespace
 
-from codexmgr.cli import main
-from codexmgr.codex import build_codex_command
+from codexmgr.commands.codex import build_codex_command
+from codexmgr.interface.cli import main
 
 
 def test_build_codex_command_includes_configured_skills(workspace):
@@ -136,7 +136,7 @@ def test_codex_subcommand_passes_args_and_return_code(workspace, monkeypatch):
         captured["cwd"] = cwd
         return SimpleNamespace(returncode=42)
 
-    monkeypatch.setattr("codexmgr.codex.subprocess.run", fake_run)
+    monkeypatch.setattr("codexmgr.commands.codex.subprocess.run", fake_run)
 
     stdout = io.StringIO()
     stderr = io.StringIO()
@@ -182,7 +182,7 @@ enabled = ["example"]
         assert (project / ".codex" / "config.toml").is_file()
         return SimpleNamespace(returncode=7)
 
-    monkeypatch.setattr("codexmgr.codex.subprocess.run", fake_run)
+    monkeypatch.setattr("codexmgr.commands.codex.subprocess.run", fake_run)
 
     stdout = io.StringIO()
     stderr = io.StringIO()
@@ -219,7 +219,7 @@ def test_codex_subcommand_does_not_run_codex_when_apply_fails(
     def fake_run(command, cwd):
         raise AssertionError("codex subprocess should not run")
 
-    monkeypatch.setattr("codexmgr.codex.subprocess.run", fake_run)
+    monkeypatch.setattr("codexmgr.commands.codex.subprocess.run", fake_run)
 
     stdout = io.StringIO()
     stderr = io.StringIO()

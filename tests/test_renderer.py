@@ -2,8 +2,8 @@
 
 import pytest
 
-from codexmgr.errors import CommandError
-from codexmgr.renderer import render_agents_markdown
+from codexmgr.agents.renderer import render_agents_markdown
+from codexmgr.core.errors import CommandError
 
 
 def test_renderer_rejects_scalar_top_level_template_entries():

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from codexmgr.paths import global_codex_dir, global_codexmgr_dir
+from codexmgr.core.paths import global_codex_dir, global_codexmgr_dir
 
 
 def test_defaults_to_home_codex_directory(monkeypatch: pytest.MonkeyPatch):

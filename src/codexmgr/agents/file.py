@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from .errors import CommandError
+from ..core.errors import CommandError
 
 BEGIN_MARKER = "<!-- BEGIN CODEXMGR GENERATED -->"
 END_MARKER = "<!-- END CODEXMGR GENERATED -->"

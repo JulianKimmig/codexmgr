@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from codexmgr.agents_file import write_managed_agents_md
-from codexmgr.errors import CommandError
+from codexmgr.agents.file import write_managed_agents_md
+from codexmgr.core.errors import CommandError
 
 BEGIN = "<!-- BEGIN CODEXMGR GENERATED -->"
 END = "<!-- END CODEXMGR GENERATED -->"

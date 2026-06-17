@@ -162,7 +162,7 @@ def test_mcp_list_merges_codex_servers_with_project_overrides(workspace, run_cli
             stderr="",
         )
 
-    monkeypatch.setattr("codexmgr.mcp_discovery.subprocess.run", fake_run)
+    monkeypatch.setattr("codexmgr.mcp.discovery.subprocess.run", fake_run)
     run_cli(["setup"], project, codex_home)
     run_cli(["mcp", "disable", "--no-sync", "browsermcp"], project, codex_home)
     run_cli(["mcp", "set-token-env", "--no-sync", "browsermcp", "BROWSERMCP_TOKEN"], project, codex_home)
@@ -189,7 +189,7 @@ def test_mcp_list_reports_codex_discovery_failures(workspace, run_cli, monkeypat
     def fake_run(command, cwd, capture_output, text):
         return SimpleNamespace(returncode=2, stdout="", stderr="bad config")
 
-    monkeypatch.setattr("codexmgr.mcp_discovery.subprocess.run", fake_run)
+    monkeypatch.setattr("codexmgr.mcp.discovery.subprocess.run", fake_run)
 
     exit_code, stdout, stderr = run_cli(["mcp", "list"], project, codex_home)
 

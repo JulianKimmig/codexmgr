@@ -4,8 +4,8 @@ import tomllib
 from collections.abc import Mapping
 from typing import Any
 
-from .errors import CommandError
-from .toml_io import plain_toml_value
+from ..core.errors import CommandError
+from ..core.toml_io import plain_toml_value
 
 APPROVAL_MODES = {"auto", "prompt", "approve"}
 SAFE_FIELDS = {

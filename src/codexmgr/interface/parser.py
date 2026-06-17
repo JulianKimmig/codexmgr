@@ -2,7 +2,7 @@
 
 import argparse
 
-from .navigation import add_cd_arguments
+from ..commands.navigation import add_cd_arguments
 
 
 def build_parser() -> argparse.ArgumentParser:

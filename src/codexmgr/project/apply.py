@@ -4,22 +4,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .agents_file import render_managed_agents_md
-from .agentsmd import resolve_locked_agents_md
-from .errors import CommandError
-from .mcp import resolve_overrides
-from .mcp_apply import apply_mcp_overrides, mcp_lock_data
-from .paths import (
+from .config import load_required_project_config
+from ..agents.file import render_managed_agents_md
+from ..agents.manager import resolve_locked_agents_md
+from ..agents.renderer import render_agents_markdown
+from ..core.errors import CommandError
+from ..core.paths import (
     agents_md_path,
     codex_config_path,
     config_path,
     lock_path,
     project_codex_dir,
 )
-from .project_config import load_required_project_config
-from .renderer import render_agents_markdown
-from .skills import resolve_codex_skill_entries
-from .toml_io import dump_toml, ensure_toml_table, load_optional_toml_file
+from ..core.toml_io import dump_toml, ensure_toml_table, load_optional_toml_file
+from ..mcp.apply import apply_mcp_overrides, mcp_lock_data
+from ..mcp.config import resolve_overrides
+from ..skills.config import resolve_codex_skill_entries
 
 
 @dataclass(frozen=True)

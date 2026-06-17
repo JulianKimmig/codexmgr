@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
-from .agentsmd import (
+from ..agents.manager import (
     add_agentsmd,
     init_agentsmd_template,
     list_agentsmd_options,
@@ -13,17 +13,17 @@ from .agentsmd import (
     show_agentsmd,
     validate_agentsmd,
 )
-from .cli_parser import build_parser
-from .codex import run_codex
-from .errors import CommandError
-from .health import run_doctor, run_status
-from .mcp_cli import run_mcp_command
-from .navigation import run_codexmgr_home_action
-from .paths import global_codex_dir, global_codexmgr_dir
-from .project import apply_project_config, setup_project
-from .skill_listing import skill_list_lines
-from .skills import disable_skill, enable_skill
-from .sync import check_project_sync
+from ..commands.codex import run_codex
+from ..commands.health import run_doctor, run_status
+from ..commands.navigation import run_codexmgr_home_action
+from ..core.errors import CommandError
+from ..core.paths import global_codex_dir, global_codexmgr_dir
+from ..mcp.cli import run_mcp_command
+from ..project.apply import apply_project_config, setup_project
+from ..project.sync import check_project_sync
+from ..skills.config import disable_skill, enable_skill
+from ..skills.listing import skill_list_lines
+from .parser import build_parser
 
 
 def main(

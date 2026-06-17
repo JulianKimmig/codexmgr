@@ -3,9 +3,9 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from .paths import config_path
-from .skills import _resolve_skill_file, _skill_lists
-from .toml_io import load_optional_toml_file
+from .config import _resolve_skill_file, _skill_lists
+from ..core.paths import config_path
+from ..core.toml_io import load_optional_toml_file
 
 
 @dataclass(frozen=True)

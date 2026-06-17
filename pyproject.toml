@@ -21,7 +21,7 @@ classifiers = [
 ]
 
 [project.scripts]
-codexmgr = "codexmgr.cli:entrypoint"
+codexmgr = "codexmgr.interface.cli:entrypoint"
 
 [project.optional-dependencies]
 dev = [

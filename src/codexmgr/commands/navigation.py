@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
-from .errors import CommandError
+from ..core.errors import CommandError
 
 CD_ACTION = "cd"
 EXPLORER_ACTION = "explorer"

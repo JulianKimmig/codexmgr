@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from codexmgr import navigation
+import codexmgr.commands.navigation as navigation
 
 
 def test_cd_launches_shell_in_codexmgr_home(

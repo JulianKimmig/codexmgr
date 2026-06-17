@@ -3,8 +3,8 @@
 from collections.abc import Mapping, MutableMapping
 from typing import Any
 
-from .mcp_fields import known_fields
-from .toml_io import ensure_toml_table
+from .fields import known_fields
+from ..core.toml_io import ensure_toml_table
 
 
 def apply_mcp_overrides(

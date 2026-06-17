@@ -4,12 +4,12 @@ import os
 from pathlib import Path
 from typing import TextIO
 
-from .agentsmd import resolve_locked_agents_md
-from .errors import CommandError
-from .paths import project_codex_dir
-from .project_config import agents_md_sources, load_required_project_config
-from .skill_listing import configured_skill_lists, missing_enabled_skills
-from .sync import generated_file_diffs
+from ..agents.manager import resolve_locked_agents_md
+from ..core.errors import CommandError
+from ..core.paths import project_codex_dir
+from ..project.config import agents_md_sources, load_required_project_config
+from ..project.sync import generated_file_diffs
+from ..skills.listing import configured_skill_lists, missing_enabled_skills
 
 
 def run_status(
