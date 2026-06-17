@@ -10,6 +10,7 @@ The tool is intentionally narrow:
 
 - compose reusable AGENTS.md instruction fragments
 - enable or disable Codex skills per project
+- enable or disable reusable Codex hook bundles per project
 - enable, disable, inspect, and update safe project-local MCP overrides
 - write reproducible lock data for the resolved project configuration
 - run `codex` with project `.codex/config.toml` values translated into `-c`
@@ -74,10 +75,14 @@ This updates `.codex/codexmgr.toml`, runs `apply`, writes
 
 - `.codex/codexmgr.toml`: source configuration edited by CLI commands or by
   hand
-- `.codex/codexmgr.lock`: resolved template, skill, and MCP state written by
+- `.codex/codexmgr.lock`: resolved template, skill, hook, and MCP state written by
   `apply`
 - `.codex/config.toml`: Codex config updated with `[[skills.config]]` entries
   and `[mcp_servers.<id>]` overrides
+- `.codex/hooks.json`: Codex hook config updated with enabled reusable hook
+  bundles while preserving unmanaged local hooks
+- `.codex/hooks/<name>`: project-local copies of enabled hook bundle support
+  files
 - `AGENTS.md`: project instructions, with only the managed block replaced
 
 The managed AGENTS.md block is:
@@ -92,7 +97,7 @@ Manual content outside this block is preserved. If the block is missing,
 
 ## Project Configuration
 
-`.codex/codexmgr.toml` supports AGENTS.md templates, skill state, and MCP
+`.codex/codexmgr.toml` supports AGENTS.md templates, skill state, hook state, and MCP
 overrides:
 
 ```toml
@@ -102,6 +107,10 @@ src = ["coding", "/absolute/or/project-relative/template.toml"]
 [skills]
 enabled = ["review-helper"]
 disabled = ["experimental-skill", "skills/local-disabled"]
+
+[hooks]
+enabled = ["repo-rules"]
+disabled = ["experimental-hook"]
 
 [mcp.servers.browsermcp]
 enabled = true
@@ -120,6 +129,12 @@ every apply by overlaying source files while preserving extra local files.
 Path-like skill values resolve to either a `SKILL.md` file or a directory
 containing `SKILL.md`. Missing skills are written as name-based entries so Codex
 can resolve them later.
+
+Named hooks resolve from `$CODEXMGR_HOME/hooks/<name>/hooks.json`. Enabled hook
+bundles are merged into `.codex/hooks.json` on every apply with
+`codexmanager_meta` added to each managed handler. Existing unmanaged hooks are
+preserved. Bundle files other than the root `hooks.json` are copied into
+`.codex/hooks/<name>`.
 
 Mutating commands run `apply` automatically unless `--no-sync` is passed.
 Project guidelines require `apply` whenever `.codex/codexmgr.toml` changes,
@@ -171,6 +186,9 @@ codexmgr init-template agentsmd <name>
 codexmgr skill list
 codexmgr skill enable [--no-sync] <name-or-skill-path>
 codexmgr skill disable [--no-sync] <name-or-skill-path>
+codexmgr hooks list
+codexmgr hooks enable [--no-sync] <hook-name>
+codexmgr hooks disable [--no-sync] <hook-name>
 codexmgr mcp list
 codexmgr mcp show <server-id>
 codexmgr mcp validate
@@ -189,9 +207,10 @@ codexmgr codex <args...>
 
 `apply` reads `.codex/codexmgr.toml`, resolves configured sources, writes
 `.codex/codexmgr.lock`, updates `.codex/config.toml` skill entries when a
-`[skills]` table is configured, writes local `[mcp_servers.<id>]` overrides when
-`[mcp]` is configured, and refreshes the generated `AGENTS.md` block when
-`[agents_md]` is configured.
+`[skills]` table is configured, writes `.codex/hooks.json` when `[hooks]` is
+configured, writes local `[mcp_servers.<id>]` overrides when `[mcp]` is
+configured, and refreshes the generated `AGENTS.md` block when `[agents_md]` is
+configured.
 
 `apply --check` exits with a failure if generated files are out of sync without
 writing them. `apply --diff` also avoids writing and prints unified diffs for
@@ -203,10 +222,11 @@ the directory in a file explorer, and `codexmgr cd --terminal` to open a new
 terminal there.
 
 `doctor` checks project setup, home environment variables, project TOML syntax,
-referenced snippets, enabled skills, and stale generated files.
+referenced snippets, enabled skills, enabled hook bundles, and stale generated
+files.
 
-`status` prints the resolved homes, configured snippets and skills, and whether
-generated files are in sync.
+`status` prints the resolved homes, configured snippets, skills, hooks, and
+whether generated files are in sync.
 
 ## Project MCP Overrides
 
@@ -290,6 +310,13 @@ and marks configured skills as enabled, disabled, or missing.
 
 `skill enable` and `skill disable` keep enabled and disabled lists mutually
 exclusive. Repeated commands keep one entry.
+
+`hooks list` prints available `$CODEXMGR_HOME/hooks/*/hooks.json` entries and
+marks configured hook bundles as enabled, disabled, or missing.
+
+`hooks enable` validates that the named hook bundle exists before writing
+config. `hooks enable` and `hooks disable` keep enabled and disabled lists
+mutually exclusive. Repeated commands keep one entry.
 
 `codex` forwards arguments to the real `codex` command. Values from
 `.codex/config.toml` are flattened into `-c key=value` overrides. User-provided

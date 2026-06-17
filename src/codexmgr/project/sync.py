@@ -5,7 +5,8 @@ from difflib import unified_diff
 from pathlib import Path
 from typing import TextIO
 
-from .apply import GeneratedFile, build_project_state
+from .apply import build_project_state
+from .state import GeneratedFile
 from ..skills.copies import SkillCopyFile
 
 
@@ -53,6 +54,10 @@ def generated_file_diffs(
             diffs.append(diff)
     for copy_file in state.copy_files:
         diff = _copy_file_diff(cwd, copy_file)
+        if diff is not None:
+            diffs.append(diff)
+    for obsolete_file in state.obsolete_file_targets:
+        diff = _obsolete_file_diff(cwd, obsolete_file)
         if diff is not None:
             diffs.append(diff)
     return diffs
@@ -168,6 +173,22 @@ def _copy_file_diff(cwd: Path, copy_file: SkillCopyFile) -> FileDiff | None:
         expected_text,
         current_binary or expected_binary,
     )
+
+
+def _obsolete_file_diff(cwd: Path, path: Path) -> FileDiff | None:
+    """Build a diff for one generated file expected to be absent.
+
+    Args:
+        cwd: Project directory used as display root.
+        path: File path that should not exist.
+
+    Returns:
+        File diff, or None when the path is already absent.
+    """
+    if not path.exists():
+        return None
+    current = _read_existing_text(path)
+    return FileDiff(path, _display_path(cwd, path), True, current, "")
 
 
 def _decode_bytes(content: bytes) -> tuple[str, bool]:

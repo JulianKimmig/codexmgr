@@ -21,6 +21,8 @@ from ..core.paths import global_codex_dir, global_codexmgr_dir
 from ..mcp.cli import run_mcp_command
 from ..project.apply import apply_project_config, setup_project
 from ..project.sync import check_project_sync
+from ..hooks.config import disable_hook, enable_hook
+from ..hooks.listing import hook_list_lines
 from ..skills.config import disable_skill, enable_skill
 from ..skills.listing import skill_list_lines
 from .parser import build_parser
@@ -192,6 +194,34 @@ def _dispatch(
         skill = disable_skill(args.skill, cwd)
         return _finish_config_change(
             f"Disabled {skill}",
+            args.no_sync,
+            cwd,
+            codex_home,
+            codexmgr_home,
+            stdout,
+        )
+
+    if args.command == "hooks" and args.hooks_command == "list":
+        lines = hook_list_lines(cwd, codexmgr_home)
+        if lines:
+            stdout.write("\n".join(lines) + "\n")
+        return 0
+
+    if args.command == "hooks" and args.hooks_command == "enable":
+        hook = enable_hook(args.hook, cwd, codexmgr_home)
+        return _finish_config_change(
+            f"Enabled {hook}",
+            args.no_sync,
+            cwd,
+            codex_home,
+            codexmgr_home,
+            stdout,
+        )
+
+    if args.command == "hooks" and args.hooks_command == "disable":
+        hook = disable_hook(args.hook, cwd)
+        return _finish_config_change(
+            f"Disabled {hook}",
             args.no_sync,
             cwd,
             codex_home,

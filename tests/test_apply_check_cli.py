@@ -1,5 +1,7 @@
 """CLI tests for checking generated codexmgr files without writing them."""
 
+import json
+
 
 def test_apply_check_succeeds_when_generated_files_are_current(
     workspace,
@@ -151,6 +153,65 @@ def test_apply_diff_reports_managed_skill_copy_changes_without_writing(
     assert target_file.read_text(encoding="utf-8") == "# Local edit\n"
 
 
+def test_apply_check_reports_stale_managed_hook_config(
+    workspace,
+    run_cli_with_homes,
+):
+    """apply --check reports stale managed hooks.json content."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_hook_bundle(codexmgr_home, "rules")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(
+        ["hooks", "enable", "--no-sync", "rules"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["apply", "--check"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert "Out of sync: .codex/hooks.json" in stdout
+    assert not (project / ".codex" / "hooks.json").exists()
+
+
+def test_apply_check_reports_stale_managed_hook_copy(
+    workspace,
+    run_cli_with_homes,
+):
+    """apply --check reports stale managed hook support files."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_hook_bundle(
+        codexmgr_home,
+        "rules",
+        files={"rules_context.py": "print('rules')\n"},
+    )
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(["hooks", "enable", "rules"], project, codex_home, codexmgr_home)
+    target_file = project / ".codex" / "hooks" / "rules" / "rules_context.py"
+    target_file.write_text("local edit\n", encoding="utf-8")
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["apply", "--check"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert "Out of sync: .codex/hooks/rules/rules_context.py" in stdout
+    assert target_file.read_text(encoding="utf-8") == "local edit\n"
+
+
 def _write_skill(home, name, content):
     """Create a named skill directory with a SKILL.md file.
 
@@ -167,3 +228,46 @@ def _write_skill(home, name, content):
     skill_file = skill_dir / "SKILL.md"
     skill_file.write_text(content, encoding="utf-8")
     return skill_file
+
+
+def _write_hook_bundle(home, name, files=None):
+    """Create a named hook bundle under CODEXMGR_HOME.
+
+    Args:
+        home: codexmgr home directory where the hook should be created.
+        name: Hook bundle directory name.
+        files: Optional mapping of relative file paths to text content.
+
+    Returns:
+        Path to the created hooks.json file.
+    """
+    hook_dir = home / "hooks" / name
+    hook_dir.mkdir(parents=True)
+    hook_file = hook_dir / "hooks.json"
+    hook_file.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "SessionStart": [
+                        {
+                            "matcher": "startup|resume",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "python3 .codex/hooks/rules/rules_context.py",
+                                },
+                            ],
+                        },
+                    ],
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    for relative_path, content in (files or {}).items():
+        path = hook_dir / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    return hook_file

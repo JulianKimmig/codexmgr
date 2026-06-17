@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_codex_parser(subparsers)
     _add_agentsmd_parser(subparsers)
     _add_skill_parser(subparsers)
+    _add_hooks_parser(subparsers)
     _add_mcp_parser(subparsers)
     _add_init_template_parser(subparsers)
     subparsers.add_parser("doctor", help="Check project configuration health")
@@ -128,6 +129,29 @@ def _add_skill_parser(subparsers: argparse._SubParsersAction) -> None:
     disable.add_argument("skill", help="Skill name or path")
 
     skill_subparsers.add_parser("list", help="List available and configured skills")
+
+
+def _add_hooks_parser(subparsers: argparse._SubParsersAction) -> None:
+    """Add hook bundle management parsers.
+
+    Args:
+        subparsers: Top-level subparser action.
+
+    Returns:
+        None. The parser is mutated in place.
+    """
+    hooks = subparsers.add_parser("hooks", help="Manage project hook configuration")
+    hooks_subparsers = hooks.add_subparsers(dest="hooks_command", required=True)
+
+    enable = hooks_subparsers.add_parser("enable", help="Enable a hook bundle")
+    _add_no_sync_argument(enable)
+    enable.add_argument("hook", help="Hook bundle name")
+
+    disable = hooks_subparsers.add_parser("disable", help="Disable a hook bundle")
+    _add_no_sync_argument(disable)
+    disable.add_argument("hook", help="Hook bundle name")
+
+    hooks_subparsers.add_parser("list", help="List available and configured hooks")
 
 
 def _add_mcp_parser(subparsers: argparse._SubParsersAction) -> None:
