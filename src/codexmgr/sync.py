@@ -15,12 +15,14 @@ class FileDiff:
     Attributes:
         path: Filesystem path to the generated file.
         relative_path: Project-relative display path.
+        current_exists: Whether the generated file currently exists.
         current: Current file content, or an empty string when missing.
         expected: Expected generated file content.
     """
 
     path: Path
     relative_path: str
+    current_exists: bool
     current: str
     expected: str
 
@@ -42,12 +44,14 @@ def generated_file_diffs(
     """
     diffs: list[FileDiff] = []
     for generated_file in build_project_files(cwd, codex_home, codexmgr_home):
+        current_exists = generated_file.path.exists()
         current = _read_existing_text(generated_file.path)
-        if current != generated_file.content:
+        if not current_exists or current != generated_file.content:
             diffs.append(
                 FileDiff(
                     generated_file.path,
                     _display_path(cwd, generated_file.path),
+                    current_exists,
                     current,
                     generated_file.content,
                 )
@@ -96,7 +100,7 @@ def _format_diff(diff: FileDiff) -> list[str]:
     Returns:
         Unified diff lines preserving line endings.
     """
-    return list(
+    lines = list(
         unified_diff(
             diff.current.splitlines(keepends=True),
             diff.expected.splitlines(keepends=True),
@@ -104,6 +108,12 @@ def _format_diff(diff: FileDiff) -> list[str]:
             tofile=f"{diff.relative_path} (expected)",
         )
     )
+    if lines or diff.current_exists:
+        return lines
+    return [
+        f"--- {diff.relative_path} (current)\n",
+        f"+++ {diff.relative_path} (expected)\n",
+    ]
 
 
 def _read_existing_text(path: Path) -> str:

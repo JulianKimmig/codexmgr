@@ -54,6 +54,19 @@ text = "pending"
     assert not (project / "AGENTS.md").exists()
 
 
+def test_apply_check_reports_missing_empty_codex_config(workspace, run_cli):
+    """apply --check treats a missing empty local config as out of sync."""
+    project, codex_home = workspace
+    (project / ".codex").mkdir()
+    (project / ".codex" / "codexmgr.toml").write_text("", encoding="utf-8")
+
+    exit_code, stdout, stderr = run_cli(["apply", "--check"], project, codex_home)
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert "Out of sync: .codex/config.toml" in stdout
+
+
 def test_apply_diff_prints_expected_changes_without_writing(
     workspace,
     write_home_template,

@@ -67,7 +67,10 @@ text = "review"
 
 
 def test_skill_enable_no_sync_updates_config_without_applying(
-    workspace, run_cli, read_project_config
+    workspace,
+    run_cli,
+    read_project_config,
+    read_codex_config,
 ):
     """skill enable --no-sync updates config without refreshing generated outputs."""
     project, codex_home = workspace
@@ -84,12 +87,15 @@ def test_skill_enable_no_sync_updates_config_without_applying(
         "enabled": ["coding"],
         "disabled": [],
     }
-    assert not (project / ".codex" / "config.toml").exists()
+    assert read_codex_config(project) == {}
     assert not (project / ".codex" / "codexmgr.lock").exists()
 
 
 def test_skill_disable_no_sync_updates_config_without_applying(
-    workspace, run_cli, read_project_config
+    workspace,
+    run_cli,
+    read_project_config,
+    read_codex_config,
 ):
     """skill disable --no-sync updates config without refreshing generated outputs."""
     project, codex_home = workspace
@@ -106,5 +112,5 @@ def test_skill_disable_no_sync_updates_config_without_applying(
         "enabled": [],
         "disabled": ["coding"],
     }
-    assert not (project / ".codex" / "config.toml").exists()
+    assert read_codex_config(project) == {}
     assert not (project / ".codex" / "codexmgr.lock").exists()

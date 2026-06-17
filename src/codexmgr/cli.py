@@ -110,7 +110,8 @@ def _dispatch(
     """
     if args.command == "setup":
         codex_dir = setup_project(cwd)
-        stdout.write(f"Created {codex_dir}\n")
+        apply_project_config(cwd, codex_home, codexmgr_home)
+        stdout.write(f"Created {codex_dir}\nApplied project Codex configuration\n")
         return 0
 
     if args.command == "apply":

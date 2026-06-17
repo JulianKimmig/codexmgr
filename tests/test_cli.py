@@ -4,8 +4,13 @@ BEGIN = "<!-- BEGIN CODEXMGR GENERATED -->"
 END = "<!-- END CODEXMGR GENERATED -->"
 
 
-def test_setup_creates_project_codex_directory(workspace, run_cli):
-    """setup creates a project .codex directory."""
+def test_setup_creates_project_config_and_applies_empty_codex_config(
+    workspace,
+    run_cli,
+    read_project_config,
+    read_codex_config,
+):
+    """setup creates source and generated config files for an empty project."""
     project, codex_home = workspace
 
     exit_code, stdout, stderr = run_cli(["setup"], project, codex_home)
@@ -13,7 +18,50 @@ def test_setup_creates_project_codex_directory(workspace, run_cli):
     assert exit_code == 0
     assert stderr == ""
     assert "Created" in stdout
+    assert "Applied project Codex configuration" in stdout
     assert (project / ".codex").is_dir()
+    assert (project / ".codex" / "codexmgr.toml").is_file()
+    assert (project / ".codex" / "config.toml").is_file()
+    assert read_project_config(project) == {}
+    assert read_codex_config(project) == {}
+
+
+def test_setup_preserves_existing_project_config_and_applies(
+    workspace,
+    write_home_template,
+    run_cli,
+    read_project_config,
+    read_lock,
+    assert_agents_md,
+):
+    """setup keeps an existing codexmgr.toml and refreshes generated outputs."""
+    project, codex_home = workspace
+    write_home_template(
+        codex_home,
+        "coding",
+        '''
+[rules]
+text = "from existing config"
+''',
+    )
+    (project / ".codex").mkdir()
+    (project / ".codex" / "codexmgr.toml").write_text(
+        '''
+[agents_md]
+src = ["coding"]
+''',
+        encoding="utf-8",
+    )
+
+    exit_code, _, stderr = run_cli(["setup"], project, codex_home)
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert read_project_config(project)["agents_md"]["src"] == ["coding"]
+    assert read_lock(project)["agents_md"]["coding"]["rules"]["text"] == (
+        "from existing config"
+    )
+    assert_agents_md(project, "# rules\nfrom existing config\n")
 
 
 def test_add_named_template_updates_config_and_applies(
@@ -272,10 +320,30 @@ text = "review"
     assert_agents_md(project, "# review\nreview\n")
 
 
+def test_apply_empty_project_config_writes_empty_codex_config(
+    workspace,
+    run_cli,
+    read_codex_config,
+):
+    """apply writes an empty local Codex config for empty codexmgr.toml."""
+    project, codex_home = workspace
+    (project / ".codex").mkdir()
+    (project / ".codex" / "codexmgr.toml").write_text("", encoding="utf-8")
+
+    exit_code, stdout, stderr = run_cli(["apply"], project, codex_home)
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert "Applied" in stdout
+    assert read_codex_config(project) == {}
+    assert not (project / ".codex" / "codexmgr.lock").exists()
+    assert not (project / "AGENTS.md").exists()
+
+
 def test_apply_missing_config_fails_without_creating_outputs(workspace, run_cli):
     """apply requires .codex/codexmgr.toml."""
     project, codex_home = workspace
-    run_cli(["setup"], project, codex_home)
+    (project / ".codex").mkdir()
 
     exit_code, _, stderr = run_cli(["apply"], project, codex_home)
 
@@ -285,8 +353,13 @@ def test_apply_missing_config_fails_without_creating_outputs(workspace, run_cli)
     assert not (project / "AGENTS.md").exists()
 
 
-def test_add_missing_template_fails_without_creating_config(workspace, run_cli):
-    """agentsmd add validates source existence before writing config."""
+def test_add_missing_template_fails_without_mutating_config(
+    workspace,
+    run_cli,
+    read_project_config,
+    read_codex_config,
+):
+    """agentsmd add validates source existence before mutating config."""
     project, codex_home = workspace
     run_cli(["setup"], project, codex_home)
 
@@ -294,4 +367,5 @@ def test_add_missing_template_fails_without_creating_config(workspace, run_cli):
 
     assert exit_code == 1
     assert "Template not found" in stderr
-    assert not (project / ".codex" / "codexmgr.toml").exists()
+    assert read_project_config(project) == {}
+    assert read_codex_config(project) == {}

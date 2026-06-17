@@ -44,7 +44,12 @@ enabled = false
     assert user_config.read_text(encoding="utf-8") == original_user_config
 
 
-def test_mcp_disable_no_sync_updates_only_codexmgr_toml(workspace, run_cli, read_project_config):
+def test_mcp_disable_no_sync_updates_only_codexmgr_toml(
+    workspace,
+    run_cli,
+    read_project_config,
+    read_codex_config,
+):
     """--no-sync keeps generated local Codex config untouched."""
     project, codex_home = workspace
     run_cli(["setup"], project, codex_home)
@@ -61,7 +66,7 @@ def test_mcp_disable_no_sync_updates_only_codexmgr_toml(workspace, run_cli, read
     assert read_project_config(project)["mcp"]["servers"]["browsermcp"] == {
         "enabled": False,
     }
-    assert not (project / ".codex" / "config.toml").exists()
+    assert read_codex_config(project) == {}
     assert not (codex_home / "config.toml").exists()
 
 

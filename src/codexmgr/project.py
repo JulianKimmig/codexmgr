@@ -9,7 +9,13 @@ from .agentsmd import resolve_locked_agents_md
 from .errors import CommandError
 from .mcp import resolve_overrides
 from .mcp_apply import apply_mcp_overrides, mcp_lock_data
-from .paths import agents_md_path, codex_config_path, lock_path, project_codex_dir
+from .paths import (
+    agents_md_path,
+    codex_config_path,
+    config_path,
+    lock_path,
+    project_codex_dir,
+)
 from .project_config import load_required_project_config
 from .renderer import render_agents_markdown
 from .skills import resolve_codex_skill_entries
@@ -30,16 +36,20 @@ class GeneratedFile:
 
 
 def setup_project(cwd: Path) -> Path:
-    """Create the project .codex directory.
+    """Create the project .codex directory and source config file.
 
     Args:
         cwd: Project directory to initialize.
 
     Returns:
-        The created or existing .codex directory path.
+        The created or existing .codex directory path. Existing source config
+        content is preserved.
     """
     codex_dir = project_codex_dir(cwd)
     codex_dir.mkdir(parents=True, exist_ok=True)
+    source_config = config_path(cwd)
+    if not source_config.exists():
+        source_config.write_text("", encoding="utf-8")
     return codex_dir
 
 
@@ -91,7 +101,7 @@ def _generated_files(
     config: dict[str, Any],
     locked_agents_md: dict[str, Any],
     lock_data: dict[str, Any],
-    codex_config: dict[str, Any] | None,
+    codex_config: dict[str, Any],
 ) -> list[GeneratedFile]:
     """Convert resolved project data into expected generated files.
 
@@ -100,7 +110,7 @@ def _generated_files(
         config: Parsed project codexmgr configuration.
         locked_agents_md: Resolved AGENTS.md source data.
         lock_data: Lockfile data to write.
-        codex_config: Generated Codex config data, when skills are configured.
+        codex_config: Generated Codex config data.
 
     Returns:
         Expected generated files in write order.
@@ -117,8 +127,7 @@ def _generated_files(
                 render_managed_agents_md(current_agents_md, rendered),
             )
         )
-    if codex_config is not None:
-        files.append(GeneratedFile(codex_config_path(cwd), dump_toml(codex_config)))
+    files.append(GeneratedFile(codex_config_path(cwd), dump_toml(codex_config)))
     return files
 
 
@@ -140,7 +149,7 @@ def _codex_config(
     skill_entries: list[dict[str, Any]],
     mcp_overrides: dict[str, dict[str, Any]],
     previous_lock: dict[str, Any],
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """Build generated project-local Codex config content.
 
     Args:
@@ -151,11 +160,9 @@ def _codex_config(
         previous_lock: Existing codexmgr lock data.
 
     Returns:
-        Parsed .codex/config.toml data, or None when no config output is needed.
+        Parsed .codex/config.toml data with generated sections applied. Empty
+        source config produces an empty local Codex config document.
     """
-    if "skills" not in config and "mcp" not in config:
-        return None
-
     codex_config = load_optional_toml_file(codex_config_path(cwd))
     if "skills" in config:
         _set_skill_config(codex_config, skill_entries)
