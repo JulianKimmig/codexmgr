@@ -11,10 +11,10 @@ from textual.widgets import Footer, Header, Label, SelectionList, Static
 
 from ..core.errors import CommandError
 from .diff import staged_diff_lines
-from .items import agentsmd_items, hook_items, mcp_items, package_items, skill_items
+from .items import agent_items, agentsmd_items, hook_items, mcp_items, package_items, skill_items
 from .models import ManagedItem
 from .package_selection import set_package_selection
-from .rendering import APP_CSS, SECTION_TITLES, TUI_BINDINGS, selection_for_item
+from .rendering import APP_CSS, NAV_LABELS, SECTION_TITLES, TUI_BINDINGS, selection_for_item
 from .state import StagedConfig, load_staged_config, save_staged_config
 
 
@@ -72,17 +72,8 @@ class CodexMgrTui(App[int]):
         yield Header(show_clock=True)
         with Horizontal(id="layout"):
             with Vertical(id="nav"):
-                yield Label("1 Dashboard")
-                yield Label("2 AGENTS.md")
-                yield Label("3 Skills")
-                yield Label("4 Hooks")
-                yield Label("5 Packages")
-                yield Label("6 MCP")
-                yield Label("")
-                yield Label("space Toggle")
-                yield Label("s Save")
-                yield Label("r Refresh")
-                yield Label("q Quit")
+                for label in NAV_LABELS:
+                    yield Label(label)
             with Vertical(id="main"):
                 yield Static(id="title")
                 yield SelectionList[str](id="items")
@@ -177,6 +168,8 @@ class CodexMgrTui(App[int]):
             self.staged.set_skill_selected(value, selected)
         elif self.section == "hooks":
             self.staged.set_hook_selected(value, selected)
+        elif self.section == "agents":
+            self.staged.set_agent_selected(value, selected)
         elif self.section == "packages":
             set_package_selection(self.staged, value, selected)
         elif self.section == "mcp":
@@ -236,6 +229,8 @@ class CodexMgrTui(App[int]):
             return skill_items(self.staged), ""
         if self.section == "hooks":
             return hook_items(self.staged), ""
+        if self.section == "agents":
+            return agent_items(self.staged), ""
         if self.section == "packages":
             return package_items(self.staged), ""
         if self.section == "mcp":

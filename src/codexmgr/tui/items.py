@@ -3,6 +3,8 @@
 from pathlib import Path
 
 from ..agents.manager import list_agentsmd_options
+from ..custom_agents.config import agent_lists
+from ..custom_agents.sources import available_agent_names, resolve_agent_source
 from ..core.paths import resolve_template
 from ..core.errors import CommandError
 from ..hooks.config import hook_lists
@@ -91,6 +93,24 @@ def hook_items(staged: StagedConfig) -> list[ManagedItem]:
     names = sorted(available | set(enabled) | set(disabled))
     return [
         ManagedItem(name, _state(name, enabled, disabled), _missing_hook(name, staged))
+        for name in names
+    ]
+
+
+def agent_items(staged: StagedConfig) -> list[ManagedItem]:
+    """Return staged custom-agent items.
+
+    Args:
+        staged: Staged project configuration.
+
+    Returns:
+        Sorted display items.
+    """
+    enabled, disabled = agent_lists(staged.config)
+    available = set(available_agent_names(staged.codexmgr_home))
+    names = sorted(available | set(enabled) | set(disabled))
+    return [
+        ManagedItem(name, _state(name, enabled, disabled), _missing_agent(name, staged))
         for name in names
     ]
 
@@ -217,6 +237,22 @@ def _missing_hook(name: str, staged: StagedConfig) -> bool:
     if name not in enabled and name not in disabled:
         return False
     return resolve_hook_source(name, staged.codexmgr_home) is None
+
+
+def _missing_agent(name: str, staged: StagedConfig) -> bool:
+    """Return whether a configured custom agent cannot be resolved.
+
+    Args:
+        name: Custom-agent name.
+        staged: Staged project configuration.
+
+    Returns:
+        True when the custom agent is configured and missing.
+    """
+    enabled, disabled = agent_lists(staged.config)
+    if name not in enabled and name not in disabled:
+        return False
+    return resolve_agent_source(name, staged.codexmgr_home) is None
 
 
 def _mcp_item(name: str, overrides: dict, available: dict) -> ManagedItem:

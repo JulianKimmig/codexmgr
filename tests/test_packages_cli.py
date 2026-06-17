@@ -49,11 +49,13 @@ text = "rendered"
         "repo-rules",
         files={"rules_context.py": "print('rules')\n"},
     )
+    _write_agent(codexmgr_home, "rule-retriever")
     _write_package(
         codexmgr_home,
         "repo-rules",
         '''
 agentsmd = ["coding"]
+agents = ["rule-retriever"]
 hooks = ["repo-rules"]
 skills = ["repo-rule-manager"]
 ''',
@@ -73,10 +75,13 @@ skills = ["repo-rule-manager"]
     assert "Applied project Codex configuration" in stdout
     assert read_project_config(project) == {
         "agents_md": {"src": ["coding"]},
+        "agents": {"enabled": ["rule-retriever"], "disabled": []},
         "skills": {"enabled": ["repo-rule-manager"], "disabled": []},
         "hooks": {"enabled": ["repo-rules"], "disabled": []},
     }
     assert_agents_md(project, "# rules\nrendered\n")
+    agent_file = project / ".codex" / "agents" / "rule-retriever.toml"
+    assert agent_file.read_text(encoding="utf-8") == 'name = "agent"\n'
     skill_file = project / ".agents" / "skills" / "repo-rule-manager" / "SKILL.md"
     assert read_codex_config(project)["skills"]["config"] == [
         {"path": str(skill_file.resolve()), "enabled": True},
@@ -106,11 +111,13 @@ def test_package_disable_disables_entries_and_removes_managed_copies(
         "repo-rules",
         files={"rules_context.py": "print('rules')\n"},
     )
+    _write_agent(codexmgr_home, "rule-retriever")
     _write_package(
         codexmgr_home,
         "repo-rules",
         '''
 agentsmd = ["coding"]
+agents = ["rule-retriever"]
 hooks = ["repo-rules"]
 skills = ["repo-rule-manager"]
 ''',
@@ -130,6 +137,7 @@ skills = ["repo-rule-manager"]
     assert "Disabled package repo-rules" in stdout
     assert read_project_config(project) == {
         "agents_md": {"src": []},
+        "agents": {"enabled": [], "disabled": ["rule-retriever"]},
         "skills": {"enabled": [], "disabled": ["repo-rule-manager"]},
         "hooks": {"enabled": [], "disabled": ["repo-rules"]},
     }
@@ -137,6 +145,7 @@ skills = ["repo-rule-manager"]
     assert read_codex_config(project)["skills"]["config"] == [
         {"name": "repo-rule-manager", "enabled": False},
     ]
+    assert not (project / ".codex" / "agents" / "rule-retriever.toml").exists()
     assert not (project / ".agents" / "skills" / "repo-rule-manager").exists()
     assert not (project / ".codex" / "hooks" / "repo-rules").exists()
     assert not (project / ".codex" / "hooks.json").exists()
@@ -481,6 +490,30 @@ def test_package_enable_rejects_missing_hook_before_writing(
     assert read_project_config(project) == {}
 
 
+def test_package_enable_rejects_missing_agent_before_writing(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """Missing custom-agent files fail before package config mutation."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_package(codexmgr_home, "bad", 'agents = ["missing"]\n')
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["package", "enable", "bad"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 1
+    assert stdout == ""
+    assert "Agent not found:" in stderr
+    assert read_project_config(project) == {}
+
+
 def _write_package(codexmgr_home: Path, name: str, content: str) -> Path:
     """Create a package config under CODEXMGR_HOME.
 
@@ -514,6 +547,23 @@ def _write_skill(codexmgr_home: Path, name: str) -> Path:
     skill_file = skill_dir / "SKILL.md"
     skill_file.write_text("# Skill\n", encoding="utf-8")
     return skill_file
+
+
+def _write_agent(codexmgr_home: Path, name: str) -> Path:
+    """Create a codexmgr-home custom agent TOML file.
+
+    Args:
+        codexmgr_home: codexmgr home directory.
+        name: Bare custom-agent name.
+
+    Returns:
+        Path to the created custom-agent TOML file.
+    """
+    agents_dir = codexmgr_home / "agents"
+    agents_dir.mkdir(parents=True)
+    path = agents_dir / f"{name}.toml"
+    path.write_text('name = "agent"\n', encoding="utf-8")
+    return path
 
 
 def _write_hook_bundle(

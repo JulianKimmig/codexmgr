@@ -38,6 +38,38 @@ async def test_tui_app_toggles_skill_and_saves_without_sync(
 
 
 @pytest.mark.asyncio
+async def test_tui_app_toggles_agent_and_saves_without_sync(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """The Agents screen lets users select a custom agent and save changes."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_agent(codexmgr_home, "reviewer")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    app = CodexMgrTui(
+        cwd=project,
+        codex_home=codex_home,
+        codexmgr_home=codexmgr_home,
+        no_sync=True,
+        show_diff=False,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("5")
+        await pilot.press("space")
+        await pilot.press("s")
+        await pilot.pause()
+
+    assert read_project_config(project)["agents"] == {
+        "enabled": ["reviewer"],
+        "disabled": [],
+    }
+    assert not (project / ".codex" / "agents" / "reviewer.toml").exists()
+
+
+@pytest.mark.asyncio
 async def test_tui_app_does_not_rebuild_skill_list_on_toggle(
     workspace,
     run_cli_with_homes,
@@ -107,7 +139,7 @@ skills = ["strict-review"]
     )
 
     async with app.run_test() as pilot:
-        await pilot.press("5")
+        await pilot.press("6")
         await pilot.press("down")
         await pilot.press("space")
         await pilot.press("s")
@@ -134,6 +166,23 @@ def _write_skill(home, name):
     skill_file = skill_dir / "SKILL.md"
     skill_file.write_text("# Skill\n", encoding="utf-8")
     return skill_file
+
+
+def _write_agent(home, name):
+    """Create a codexmgr-home custom agent for tests.
+
+    Args:
+        home: Codexmgr home directory.
+        name: Agent file stem.
+
+    Returns:
+        Path to the created custom-agent TOML file.
+    """
+    agents_dir = home / "agents"
+    agents_dir.mkdir(parents=True)
+    path = agents_dir / f"{name}.toml"
+    path.write_text('name = "agent"\n', encoding="utf-8")
+    return path
 
 
 def _write_package(home, name, content):

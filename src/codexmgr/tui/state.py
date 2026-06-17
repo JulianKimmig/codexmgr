@@ -8,22 +8,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..custom_agents.config import agent_lists, set_agent_state_in_config
+from ..custom_agents.sources import require_agent_source
 from ..core.paths import config_path, resolve_template
 from ..core.toml_io import dump_toml, load_optional_toml_file, write_toml_file
 from ..hooks.config import hook_lists, set_hook_state_in_config
 from ..hooks.sources import require_hook_source
 from ..mcp.config import resolve_overrides, set_enabled_in_config
-from ..packages.config import PackageConfig, PackageEntries, load_package_config
-from ..packages.mutation import apply_package_entries_to_config
 from ..project.apply import apply_project_config
 from ..project.config import agents_md_sources, require_codex_dir, set_agents_md_sources
 from ..skills.config import _skill_lists, set_skill_state_in_config
+from . import package_state as packages
 from .mutations import (
-    package_checks,
+    remove_agent,
     remove_hook,
     remove_mcp_server,
     remove_skill,
-    validate_package_enable,
 )
 
 
@@ -38,6 +38,7 @@ class StagedConfig:
         config: Parsed TOML document staged for later saving.
         original_text: Serialized config text as it existed when loaded.
         original_skills: Skill refs configured when the stage was loaded.
+        original_agents: Custom-agent names configured when the stage was loaded.
         original_hooks: Hook names configured when the stage was loaded.
         original_mcp_servers: MCP server ids configured when the stage was loaded.
     """
@@ -48,6 +49,7 @@ class StagedConfig:
     config: MutableMapping[str, Any]
     original_text: str
     original_skills: frozenset[str]
+    original_agents: frozenset[str]
     original_hooks: frozenset[str]
     original_mcp_servers: frozenset[str]
 
@@ -123,6 +125,31 @@ class StagedConfig:
         else:
             remove_hook(self.config, hook)
 
+    def set_agent_enabled(self, agent: str, enabled: bool) -> None:
+        """Set a custom agent to enabled or disabled.
+
+        Args:
+            agent: Custom-agent name.
+            enabled: Desired enabled state.
+        """
+        if enabled:
+            require_agent_source(agent, self.codexmgr_home)
+        set_agent_state_in_config(self.config, agent, enabled=enabled)
+
+    def set_agent_selected(self, agent: str, selected: bool) -> None:
+        """Apply checkbox semantics for a custom-agent selection.
+
+        Args:
+            agent: Custom-agent name.
+            selected: Whether the custom agent is currently checked.
+        """
+        if selected:
+            self.set_agent_enabled(agent, True)
+        elif agent in self.original_agents:
+            self.set_agent_enabled(agent, False)
+        else:
+            remove_agent(self.config, agent)
+
     def set_package_enabled(self, name: str, enabled: bool) -> None:
         """Enable or disable all entries from a packaged configuration.
 
@@ -130,8 +157,13 @@ class StagedConfig:
             name: Package name under CODEXMGR_HOME/packages.
             enabled: Whether package entries should be active.
         """
-        package = load_package_config(name, self.codexmgr_home)
-        self._set_package_entries(_root_entries(package), enabled)
+        packages.set_package_enabled(
+            self.config,
+            name,
+            enabled,
+            self.cwd,
+            self.codexmgr_home,
+        )
 
     def set_package_profile_enabled(
         self,
@@ -146,8 +178,14 @@ class StagedConfig:
             profile: Profile name within the package config.
             enabled: Whether profile entries should be active.
         """
-        package = load_package_config(name, self.codexmgr_home)
-        self._set_package_entries(_profile_entries(package, profile), enabled)
+        packages.set_package_profile_enabled(
+            self.config,
+            name,
+            profile,
+            enabled,
+            self.cwd,
+            self.codexmgr_home,
+        )
 
     def package_state(self, name: str) -> str:
         """Return enabled, partial, or disabled for a package.
@@ -158,8 +196,7 @@ class StagedConfig:
         Returns:
             Package state computed from staged entries.
         """
-        package = load_package_config(name, self.codexmgr_home)
-        return _state_from_checks(package_checks(self.config, _root_entries(package)))
+        return packages.package_state(self.config, name, self.codexmgr_home)
 
     def package_profile_state(self, name: str, profile: str) -> str:
         """Return enabled, partial, or disabled for a package profile.
@@ -171,21 +208,12 @@ class StagedConfig:
         Returns:
             Package profile state computed from staged entries.
         """
-        package = load_package_config(name, self.codexmgr_home)
-        return _state_from_checks(
-            package_checks(self.config, _profile_entries(package, profile)),
+        return packages.package_profile_state(
+            self.config,
+            name,
+            profile,
+            self.codexmgr_home,
         )
-
-    def _set_package_entries(self, entries: PackageEntries, enabled: bool) -> None:
-        """Enable or disable package entries in staged config.
-
-        Args:
-            entries: Package root or profile entries.
-            enabled: Whether entries should be active.
-        """
-        if enabled:
-            validate_package_enable(entries, self.cwd, self.codexmgr_home)
-        apply_package_entries_to_config(self.config, entries, enabled=enabled)
 
     def set_mcp_enabled(self, server_id: str, enabled: bool) -> None:
         """Set an MCP server enabled override.
@@ -208,48 +236,6 @@ class StagedConfig:
         else:
             remove_mcp_server(self.config, server_id)
 
-
-def _root_entries(package: PackageConfig) -> PackageEntries:
-    """Return root entries for a package.
-
-    Args:
-        package: Package configuration.
-
-    Returns:
-        Package root entries.
-    """
-    return PackageEntries(package.agentsmd, package.hooks, package.skills)
-
-
-def _profile_entries(package: PackageConfig, profile: str) -> PackageEntries:
-    """Return entries for one package profile.
-
-    Args:
-        package: Package configuration.
-        profile: Profile name.
-
-    Returns:
-        Package profile entries.
-    """
-    return package.profiles[profile]
-
-
-def _state_from_checks(checks: list[bool]) -> str:
-    """Return TUI state from per-entry checks.
-
-    Args:
-        checks: Active state for each entry in a package or profile.
-
-    Returns:
-        ``enabled``, ``partial``, or ``disabled``.
-    """
-    if checks and all(checks):
-        return "enabled"
-    if any(checks):
-        return "partial"
-    return "disabled"
-
-
 def load_staged_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> StagedConfig:
     """Load project configuration into a staged config object.
 
@@ -266,6 +252,7 @@ def load_staged_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> Stag
     original_text = path.read_text(encoding="utf-8") if path.exists() else ""
     config = load_optional_toml_file(path)
     enabled_skills, disabled_skills = _skill_lists(config)
+    enabled_agents, disabled_agents = agent_lists(config)
     enabled_hooks, disabled_hooks = hook_lists(config)
     mcp_servers = resolve_overrides(config, strict=False)
     return StagedConfig(
@@ -275,6 +262,7 @@ def load_staged_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> Stag
         deepcopy(config),
         original_text,
         frozenset([*enabled_skills, *disabled_skills]),
+        frozenset([*enabled_agents, *disabled_agents]),
         frozenset([*enabled_hooks, *disabled_hooks]),
         frozenset(mcp_servers),
     )

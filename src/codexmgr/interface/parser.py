@@ -3,6 +3,7 @@
 import argparse
 
 from ..commands.navigation import add_cd_arguments
+from .parsers.agents import add_agents_parser
 from .parsers.mcp import add_mcp_parser
 
 
@@ -20,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_cd_parser(subparsers)
     _add_codex_parser(subparsers)
     _add_agentsmd_parser(subparsers)
+    add_agents_parser(subparsers, _add_no_sync_argument)
     _add_skill_parser(subparsers)
     _add_hooks_parser(subparsers)
     _add_package_parser(subparsers)

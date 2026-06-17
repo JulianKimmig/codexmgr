@@ -6,6 +6,8 @@ from typing import Any
 
 from ..core.paths import config_path, resolve_template
 from ..core.toml_io import load_optional_toml_file, write_toml_file
+from ..custom_agents.config import set_agent_state_in_config
+from ..custom_agents.sources import require_agent_source
 from ..hooks.config import set_hook_state_in_config
 from ..hooks.sources import require_hook_source
 from ..project.config import agents_md_sources, require_codex_dir, set_agents_md_sources
@@ -100,6 +102,8 @@ def apply_package_entries_to_config(
         _remove_agentsmd(config, entries.agentsmd)
     for skill in entries.skills:
         set_skill_state_in_config(config, skill, enabled=enabled)
+    for agent in entries.agents:
+        set_agent_state_in_config(config, agent, enabled=enabled)
     for hook in entries.hooks:
         set_hook_state_in_config(config, hook, enabled=enabled)
 
@@ -171,6 +175,8 @@ def _validate_enable_sources(
     """
     for reference in entries.agentsmd:
         resolve_template(reference, cwd, codexmgr_home)
+    for agent in entries.agents:
+        require_agent_source(agent, codexmgr_home)
     for hook in entries.hooks:
         require_hook_source(hook, codexmgr_home)
 

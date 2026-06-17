@@ -5,7 +5,7 @@ import json
 from codexmgr.interface.parser import build_parser
 from codexmgr.project.sync import generated_file_diffs
 from codexmgr.tui.diff import staged_diff_lines
-from codexmgr.tui.items import package_items
+from codexmgr.tui.items import agent_items, package_items
 from codexmgr.tui.state import load_staged_config, save_staged_config
 
 
@@ -75,6 +75,62 @@ def test_staged_skill_toggle_writes_only_on_save(
     assert not (project / ".agents" / "skills" / "review").exists()
 
 
+def test_staged_agent_toggle_writes_only_on_save(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """Agent toggles stay in memory until the staged config is saved."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_agent(codexmgr_home, "reviewer")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+
+    staged = load_staged_config(project, codex_home, codexmgr_home)
+    staged.set_agent_enabled("reviewer", True)
+
+    assert "agents" not in read_project_config(project)
+
+    save_staged_config(staged, no_sync=True)
+
+    assert read_project_config(project)["agents"] == {
+        "enabled": ["reviewer"],
+        "disabled": [],
+    }
+    assert not (project / ".codex" / "agents" / "reviewer.toml").exists()
+
+
+def test_agent_items_include_available_enabled_disabled_and_missing(
+    workspace,
+    run_cli_with_homes,
+):
+    """The TUI agent list exposes available and configured custom agents."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_agent(codexmgr_home, "reviewer")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(
+        ["agents", "enable", "--no-sync", "reviewer"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+    run_cli_with_homes(
+        ["agents", "disable", "--no-sync", "legacy"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+    staged = load_staged_config(project, codex_home, codexmgr_home)
+
+    items = agent_items(staged)
+
+    assert [(item.name, item.state, item.missing) for item in items] == [
+        ("legacy", "disabled", True),
+        ("reviewer", "enabled", False),
+    ]
+
+
 def test_staged_package_toggle_enables_and_disables_referenced_entries(
     workspace,
     write_home_template,
@@ -87,11 +143,13 @@ def test_staged_package_toggle_enables_and_disables_referenced_entries(
     write_home_template(codexmgr_home, "coding", "[rules]\ntext = \"rendered\"\n")
     _write_skill(codexmgr_home, "repo-rule-manager")
     _write_hook_bundle(codexmgr_home, "repo-rules")
+    _write_agent(codexmgr_home, "rule-retriever")
     _write_package(
         codexmgr_home,
         "repo-rules",
         '''
 agentsmd = ["coding"]
+agents = ["rule-retriever"]
 hooks = ["repo-rules"]
 skills = ["repo-rule-manager"]
 ''',
@@ -105,6 +163,7 @@ skills = ["repo-rule-manager"]
 
     assert read_project_config(project) == {
         "agents_md": {"src": ["coding"]},
+        "agents": {"enabled": ["rule-retriever"], "disabled": []},
         "skills": {"enabled": ["repo-rule-manager"], "disabled": []},
         "hooks": {"enabled": ["repo-rules"], "disabled": []},
     }
@@ -116,6 +175,7 @@ skills = ["repo-rule-manager"]
 
     assert read_project_config(project) == {
         "agents_md": {"src": []},
+        "agents": {"enabled": [], "disabled": ["rule-retriever"]},
         "skills": {"enabled": [], "disabled": ["repo-rule-manager"]},
         "hooks": {"enabled": [], "disabled": ["repo-rules"]},
     }
@@ -132,11 +192,13 @@ def test_staged_package_reports_partial_state(
     write_home_template(codexmgr_home, "coding", "[rules]\ntext = \"rendered\"\n")
     _write_skill(codexmgr_home, "repo-rule-manager")
     _write_hook_bundle(codexmgr_home, "repo-rules")
+    _write_agent(codexmgr_home, "rule-retriever")
     _write_package(
         codexmgr_home,
         "repo-rules",
         '''
 agentsmd = ["coding"]
+agents = ["rule-retriever"]
 hooks = ["repo-rules"]
 skills = ["repo-rule-manager"]
 ''',
@@ -299,6 +361,15 @@ def _write_skill(home, name):
     skill_file = skill_dir / "SKILL.md"
     skill_file.write_text("# Skill\n", encoding="utf-8")
     return skill_file
+
+
+def _write_agent(home, name):
+    """Create a codexmgr-home custom agent for tests."""
+    agents_dir = home / "agents"
+    agents_dir.mkdir(parents=True)
+    path = agents_dir / f"{name}.toml"
+    path.write_text('name = "agent"\n', encoding="utf-8")
+    return path
 
 
 def _write_hook_bundle(home, name):

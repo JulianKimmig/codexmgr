@@ -11,7 +11,8 @@ The tool is intentionally narrow:
 - compose reusable AGENTS.md instruction fragments
 - enable or disable Codex skills per project
 - enable or disable reusable Codex hook bundles per project
-- enable or disable packaged sets of AGENTS.md, skill, and hook settings
+- enable or disable project custom agents from reusable TOML files
+- enable or disable packaged sets of AGENTS.md, agent, skill, and hook settings
 - enable, disable, inspect, and update safe project-local MCP overrides
 - use an interactive terminal UI for common project management tasks
 - write reproducible lock data for the resolved project configuration
@@ -77,14 +78,15 @@ This updates `.codex/codexmgr.toml`, runs `apply`, writes
 
 - `.codex/codexmgr.toml`: source configuration edited by CLI commands or by
   hand
-- `.codex/codexmgr.lock`: resolved template, skill, hook, and MCP state written by
-  `apply`
+- `.codex/codexmgr.lock`: resolved template, agent, skill, hook, and MCP state
+  written by `apply`
 - `.codex/config.toml`: Codex config updated with `[[skills.config]]` entries
   and `[mcp_servers.<id>]` overrides
 - `.codex/hooks.json`: Codex hook config updated with enabled reusable hook
   bundles while preserving unmanaged local hooks
 - `.codex/hooks/<name>`: project-local copies of enabled hook bundle support
   files
+- `.codex/agents/<name>.toml`: project-local copies of enabled custom agents
 - `AGENTS.md`: project instructions, with only the managed block replaced
 
 The managed AGENTS.md block is:
@@ -99,8 +101,8 @@ Manual content outside this block is preserved. If the block is missing,
 
 ## Project Configuration
 
-`.codex/codexmgr.toml` supports AGENTS.md templates, skill state, hook state, and MCP
-overrides:
+`.codex/codexmgr.toml` supports AGENTS.md templates, custom-agent state, skill
+state, hook state, and MCP overrides:
 
 ```toml
 [agents_md]
@@ -109,6 +111,10 @@ src = ["coding", "/absolute/or/project-relative/template.toml"]
 [skills]
 enabled = ["review-helper"]
 disabled = ["experimental-skill", "skills/local-disabled"]
+
+[agents]
+enabled = ["rule-retriever"]
+disabled = ["experimental-agent"]
 
 [hooks]
 enabled = ["repo-rules"]
@@ -132,6 +138,11 @@ Path-like skill values resolve to either a `SKILL.md` file or a directory
 containing `SKILL.md`. Missing skills are written as name-based entries so Codex
 can resolve them later.
 
+Named custom agents resolve from `$CODEXMGR_HOME/agents/<name>.toml`. Enabled
+agents are copied into `.codex/agents/<name>.toml` on every apply. Disabled
+agents remove their managed copy only when the lock records the file as
+codexmgr-managed.
+
 Named hooks resolve from `$CODEXMGR_HOME/hooks/<name>/hooks.json`. Enabled hook
 bundles are merged into `.codex/hooks.json` on every apply with
 `codexmanager_meta` added to each managed handler. Existing unmanaged hooks are
@@ -140,16 +151,18 @@ preserved. Bundle files other than the root `hooks.json` are copied into
 
 Packaged configurations resolve from
 `$CODEXMGR_HOME/packages/<name>/config.toml`. A package config is a TOML
-document that can contain root `agentsmd`, `hooks`, and `skills` string lists
-plus optional profile tables:
+document that can contain root `agentsmd`, `agents`, `hooks`, and `skills`
+string lists plus optional profile tables:
 
 ```toml
 agentsmd = []
+agents = ["rule-retriever"]
 hooks = ["repo-rules"]
 skills = ["repo-rule-manager"]
 
 [profiles.strict]
 agentsmd = ["strict-coding"]
+agents = ["strict-agent"]
 hooks = ["strict-rules"]
 skills = ["strict-review"]
 ```
@@ -182,10 +195,11 @@ unless `--no-sync` was explicitly requested.
 ## Interactive TUI
 
 `codexmgr tui` opens a Textual-based terminal UI for managing project-local
-configuration. It shows AGENTS.md templates, skills, hooks, packages, and MCP
-server enable overrides in selectable lists. Changes are staged in memory while
-you navigate and toggle entries. Press `s` to save; the save writes
-`.codex/codexmgr.toml` once and runs `apply` once unless `--no-sync` was used.
+configuration. It shows AGENTS.md templates, skills, hooks, custom agents,
+packages, and MCP server enable overrides in selectable lists. Changes are
+staged in memory while you navigate and toggle entries. Press `s` to save; the
+save writes `.codex/codexmgr.toml` once and runs `apply` once unless
+`--no-sync` was used.
 Package profiles appear as separate selectable rows under their package.
 
 ```bash
@@ -247,6 +261,9 @@ codexmgr init-template agentsmd <name>
 codexmgr skill list
 codexmgr skill enable [--no-sync] <name-or-skill-path> [...]
 codexmgr skill disable [--no-sync] <name-or-skill-path> [...]
+codexmgr agents list
+codexmgr agents enable [--no-sync] <agent-name> [...]
+codexmgr agents disable [--no-sync] <agent-name> [...]
 codexmgr hooks list
 codexmgr hooks enable [--no-sync] <hook-name> [...]
 codexmgr hooks disable [--no-sync] <hook-name> [...]
@@ -271,7 +288,8 @@ codexmgr codex <args...>
 
 `apply` reads `.codex/codexmgr.toml`, resolves configured sources, writes
 `.codex/codexmgr.lock`, updates `.codex/config.toml` skill entries when a
-`[skills]` table is configured, writes `.codex/hooks.json` when `[hooks]` is
+`[skills]` table is configured, copies `.codex/agents/<name>.toml` files when
+`[agents]` is configured, writes `.codex/hooks.json` when `[hooks]` is
 configured, writes local `[mcp_servers.<id>]` overrides when `[mcp]` is
 configured, and refreshes the generated `AGENTS.md` block when `[agents_md]` is
 configured.
@@ -286,11 +304,11 @@ the directory in a file explorer, and `codexmgr cd --terminal` to open a new
 terminal there.
 
 `doctor` checks project setup, home environment variables, project TOML syntax,
-referenced snippets, enabled skills, enabled hook bundles, and stale generated
-files.
+referenced snippets, enabled skills, enabled custom agents, enabled hook
+bundles, and stale generated files.
 
-`status` prints the resolved homes, configured snippets, skills, hooks, and
-whether generated files are in sync.
+`status` prints the resolved homes, configured snippets, skills, custom agents,
+hooks, and whether generated files are in sync.
 
 `codexmgr codex` can run with a just-in-time package/profile overlay without
 changing `.codex/codexmgr.toml`. Put Codex arguments after `--` when using this
@@ -393,10 +411,10 @@ mutually exclusive. Repeated commands keep one entry.
 `package list` prints available `$CODEXMGR_HOME/packages/*/config.toml`
 entries in sorted order.
 
-`package enable` and `package disable` proxy to existing AGENTS.md, skill, and
-hook project-config mutations. Package state is not tracked separately; the
-resulting `[agents_md]`, `[skills]`, and `[hooks]` tables remain the source of
-truth.
+`package enable` and `package disable` proxy to existing AGENTS.md, custom-agent,
+skill, and hook project-config mutations. Package state is not tracked
+separately; the resulting `[agents_md]`, `[agents]`, `[skills]`, and `[hooks]`
+tables remain the source of truth.
 
 `codex` forwards arguments to the real `codex` command. Values from
 `.codex/config.toml` are flattened into `-c key=value` overrides. User-provided

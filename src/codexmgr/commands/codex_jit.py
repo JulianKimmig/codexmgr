@@ -205,7 +205,9 @@ def _state_paths(state: ProjectBuild) -> list[Path]:
         *(generated_file.path for generated_file in state.files),
         *(skill_copy.target for skill_copy in state.skill_copies),
         *(hook_copy.target for hook_copy in state.hook_copies),
+        *(agent_copy.target for agent_copy in state.agent_copies),
         *state.obsolete_file_targets,
         *state.obsolete_skill_copy_targets,
         *state.obsolete_hook_copy_targets,
+        *state.obsolete_agent_copy_targets,
     ]

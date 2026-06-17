@@ -47,17 +47,34 @@ SECTION_TITLES = {
     "agentsmd": "AGENTS.md Templates",
     "skills": "Skills",
     "hooks": "Hooks",
+    "agents": "Agents",
     "packages": "Packages",
     "mcp": "MCP Servers",
 }
+
+NAV_LABELS = [
+    "1 Dashboard",
+    "2 AGENTS.md",
+    "3 Skills",
+    "4 Hooks",
+    "5 Agents",
+    "6 Packages",
+    "7 MCP",
+    "",
+    "space Toggle",
+    "s Save",
+    "r Refresh",
+    "q Quit",
+]
 
 TUI_BINDINGS = [
     ("1", "section('dashboard')", "Dashboard"),
     ("2", "section('agentsmd')", "AGENTS.md"),
     ("3", "section('skills')", "Skills"),
     ("4", "section('hooks')", "Hooks"),
-    ("5", "section('packages')", "Packages"),
-    ("6", "section('mcp')", "MCP"),
+    ("5", "section('agents')", "Agents"),
+    ("6", "section('packages')", "Packages"),
+    ("7", "section('mcp')", "MCP"),
     ("r", "refresh", "Refresh"),
     ("s", "save", "Save"),
     ("q", "quit", "Quit"),

@@ -212,6 +212,61 @@ def test_apply_check_reports_stale_managed_hook_copy(
     assert target_file.read_text(encoding="utf-8") == "local edit\n"
 
 
+def test_apply_check_reports_stale_managed_agent_copy(
+    workspace,
+    run_cli_with_homes,
+):
+    """apply --check reports stale managed custom-agent files."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_agent(codexmgr_home, "reviewer", 'name = "reviewer"\n')
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(["agents", "enable", "reviewer"], project, codex_home, codexmgr_home)
+    target_file = project / ".codex" / "agents" / "reviewer.toml"
+    target_file.write_text('name = "local"\n', encoding="utf-8")
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["apply", "--check"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert "Out of sync: .codex/agents/reviewer.toml" in stdout
+    assert target_file.read_text(encoding="utf-8") == 'name = "local"\n'
+
+
+def test_apply_diff_reports_managed_agent_copy_changes_without_writing(
+    workspace,
+    run_cli_with_homes,
+):
+    """apply --diff prints managed custom-agent diffs and leaves files unchanged."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_agent(codexmgr_home, "reviewer", 'name = "reviewer"\n')
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(["agents", "enable", "reviewer"], project, codex_home, codexmgr_home)
+    target_file = project / ".codex" / "agents" / "reviewer.toml"
+    target_file.write_text('name = "local"\n', encoding="utf-8")
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["apply", "--diff"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert "--- .codex/agents/reviewer.toml (current)" in stdout
+    assert "+++ .codex/agents/reviewer.toml (expected)" in stdout
+    assert '-name = "local"' in stdout
+    assert '+name = "reviewer"' in stdout
+    assert target_file.read_text(encoding="utf-8") == 'name = "local"\n'
+
+
 def _write_skill(home, name, content):
     """Create a named skill directory with a SKILL.md file.
 
@@ -228,6 +283,24 @@ def _write_skill(home, name, content):
     skill_file = skill_dir / "SKILL.md"
     skill_file.write_text(content, encoding="utf-8")
     return skill_file
+
+
+def _write_agent(home, name, content):
+    """Create a named custom agent under CODEXMGR_HOME.
+
+    Args:
+        home: Codexmgr home directory where the agent should be created.
+        name: Agent file stem.
+        content: TOML content to write.
+
+    Returns:
+        Path to the created custom-agent TOML file.
+    """
+    agents_dir = home / "agents"
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    path = agents_dir / f"{name}.toml"
+    path.write_text(content, encoding="utf-8")
+    return path
 
 
 def _write_hook_bundle(home, name, files=None):

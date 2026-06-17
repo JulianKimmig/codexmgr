@@ -7,6 +7,7 @@ from typing import TextIO
 from ..agents.manager import resolve_locked_agents_md
 from ..core.errors import CommandError
 from ..core.paths import project_codex_dir
+from ..custom_agents.listing import configured_agent_lists, missing_enabled_agents
 from ..project.config import agents_md_sources, load_required_project_config
 from ..project.sync import generated_file_diffs
 from ..hooks.listing import configured_hook_lists, missing_enabled_hooks
@@ -33,6 +34,7 @@ def run_status(
     config = load_required_project_config(cwd)
     enabled, disabled = configured_skill_lists(cwd)
     enabled_hooks, disabled_hooks = configured_hook_lists(cwd)
+    enabled_agents, disabled_agents = configured_agent_lists(cwd)
     diffs = generated_file_diffs(cwd, codex_home, codexmgr_home)
     lines = [
         f"Project: {cwd}",
@@ -43,6 +45,8 @@ def run_status(
         f"Disabled skills: {_format_values(disabled)}",
         f"Enabled hooks: {_format_values(enabled_hooks)}",
         f"Disabled hooks: {_format_values(disabled_hooks)}",
+        f"Enabled agents: {_format_values(enabled_agents)}",
+        f"Disabled agents: {_format_values(disabled_agents)}",
         f"Generated files: {_sync_state(diffs)}",
     ]
     lines.extend(f"  {diff.relative_path}" for diff in diffs)
@@ -81,6 +85,7 @@ def run_doctor(
     _check_agents_sources(config, cwd, codexmgr_home, report)
     _check_missing_enabled_skills(cwd, codex_home, codexmgr_home, report)
     _check_missing_enabled_hooks(cwd, codexmgr_home, report)
+    _check_missing_enabled_agents(cwd, codexmgr_home, report)
     _check_generated_files(cwd, codex_home, codexmgr_home, report)
 
     has_errors = any(line.startswith("ERROR ") for line in report)
@@ -186,6 +191,25 @@ def _check_missing_enabled_hooks(
     """
     for hook in missing_enabled_hooks(cwd, codexmgr_home):
         report.append(f"ERROR Missing enabled hook: {hook}")
+
+
+def _check_missing_enabled_agents(
+    cwd: Path,
+    codexmgr_home: Path,
+    report: list[str],
+) -> None:
+    """Check that enabled custom-agent references resolve.
+
+    Args:
+        cwd: Project directory whose configured custom agents should be checked.
+        codexmgr_home: codexmgr home used to resolve custom-agent sources.
+        report: Mutable diagnostic report receiving any error.
+
+    Returns:
+        None.
+    """
+    for agent in missing_enabled_agents(cwd, codexmgr_home):
+        report.append(f"ERROR Missing enabled agent: {agent}")
 
 
 def _check_generated_files(

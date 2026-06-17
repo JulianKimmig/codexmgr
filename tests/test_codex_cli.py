@@ -263,6 +263,7 @@ def test_codex_subcommand_supports_jit_package_profiles(
     project, codex_home = workspace
     codexmgr_home = codex_home.parent / "codexmgr-home"
     _write_home_template(codexmgr_home, "strict-agents", "[rules]\ntext = \"strict\"\n")
+    _write_home_agent(codexmgr_home, "rule-retriever")
     _write_home_skill(codexmgr_home, "base-skill")
     _write_home_skill(codexmgr_home, "strict-skill")
     _write_package(
@@ -270,6 +271,7 @@ def test_codex_subcommand_supports_jit_package_profiles(
         "repo-rules",
         '''
 agentsmd = ["strict-agents"]
+agents = ["rule-retriever"]
 skills = ["base-skill"]
 
 [profiles.strict]
@@ -289,6 +291,9 @@ skills = ["strict-skill"]
             (project / ".codex" / "config.toml").read_text(encoding="utf-8")
         )
         captured["agents_md"] = (project / "AGENTS.md").read_text(encoding="utf-8")
+        captured["agent"] = (
+            project / ".codex" / "agents" / "rule-retriever.toml"
+        ).read_text(encoding="utf-8")
         return SimpleNamespace(returncode=5)
 
     monkeypatch.setattr("codexmgr.commands.codex.subprocess.run", fake_run)
@@ -314,6 +319,7 @@ skills = ["strict-skill"]
 
     base_skill = project / ".agents" / "skills" / "base-skill" / "SKILL.md"
     strict_skill = project / ".agents" / "skills" / "strict-skill" / "SKILL.md"
+    agent_file = project / ".codex" / "agents" / "rule-retriever.toml"
     assert exit_code == 5
     assert stdout.getvalue() == ""
     assert stderr.getvalue() == ""
@@ -324,6 +330,7 @@ skills = ["strict-skill"]
         {"path": str(strict_skill.resolve()), "enabled": True},
     ]
     assert "# rules\nstrict\n" in captured["agents_md"]
+    assert captured["agent"] == 'name = "agent"\n'
     assert captured["command"] == [
         "codex",
         "-c",
@@ -341,6 +348,7 @@ skills = ["strict-skill"]
     assert tomllib.loads((project / ".codex" / "config.toml").read_text()) == {}
     assert not (project / ".codex" / "codexmgr.lock").exists()
     assert not (project / "AGENTS.md").exists()
+    assert not agent_file.exists()
     assert not base_skill.exists()
     assert not strict_skill.exists()
 
@@ -378,6 +386,23 @@ def _write_home_skill(codexmgr_home, name):
     skill_file = skill_dir / "SKILL.md"
     skill_file.write_text("# Skill\n", encoding="utf-8")
     return skill_file
+
+
+def _write_home_agent(codexmgr_home, name):
+    """Create a codexmgr-home custom agent for codex command tests.
+
+    Args:
+        codexmgr_home: codexmgr home directory.
+        name: Agent file stem.
+
+    Returns:
+        Path to the created custom-agent TOML file.
+    """
+    agents_dir = codexmgr_home / "agents"
+    agents_dir.mkdir(parents=True)
+    path = agents_dir / f"{name}.toml"
+    path.write_text('name = "agent"\n', encoding="utf-8")
+    return path
 
 
 def _write_home_template(codexmgr_home, name, content):

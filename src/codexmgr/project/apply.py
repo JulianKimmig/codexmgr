@@ -16,6 +16,15 @@ from .state import GeneratedFile, ProjectBuild
 from ..agents.manager import resolve_locked_agents_md
 from ..core.paths import config_path, lock_path, project_codex_dir
 from ..core.toml_io import load_optional_toml_file
+from ..custom_agents.copies import (
+    apply_agent_copy,
+    remove_agent_copy_target,
+)
+from ..custom_agents.resolution import (
+    AgentResolution,
+    empty_agent_resolution,
+    resolve_project_agents,
+)
 from ..mcp.config import resolve_overrides
 from ..skills.copies import (
     apply_skill_copy,
@@ -70,12 +79,16 @@ def apply_project_state(state: ProjectBuild) -> None:
         remove_skill_copy_target(target)
     for target in state.obsolete_hook_copy_targets:
         remove_hook_copy_target(target)
+    for target in state.obsolete_agent_copy_targets:
+        remove_agent_copy_target(target)
     for target in state.obsolete_file_targets:
         remove_file_target(target)
     for skill_copy in state.skill_copies:
         apply_skill_copy(skill_copy)
     for hook_copy in state.hook_copies:
         apply_hook_copy(hook_copy)
+    for agent_copy in state.agent_copies:
+        apply_agent_copy(agent_copy)
     for generated_file in state.files:
         generated_file.path.parent.mkdir(parents=True, exist_ok=True)
         generated_file.path.write_text(generated_file.content, encoding="utf-8")
@@ -119,6 +132,7 @@ def build_project_state_from_config(
     """
     previous_lock = load_optional_toml_file(lock_path(cwd))
     locked_agents_md = resolve_locked_agents_md(config, cwd, codexmgr_home)
+    agent_resolution = _resolve_agents(config, cwd, codexmgr_home, previous_lock)
     skill_resolution = _resolve_skills(config, cwd, codex_home, codexmgr_home, previous_lock)
     hook_resolution = _resolve_hooks(config, cwd, codexmgr_home, previous_lock)
     mcp_overrides = resolve_overrides(config, strict=True)
@@ -132,6 +146,7 @@ def build_project_state_from_config(
     lock_data = build_lock_data(
         config,
         locked_agents_md,
+        agent_resolution,
         skill_resolution,
         hook_resolution,
         mcp_overrides,
@@ -146,11 +161,17 @@ def build_project_state_from_config(
     )
     return ProjectBuild(
         files,
-        [*expected_copy_files(skill_resolution.copies), *hook_resolution.copy_files],
+        [
+            *expected_copy_files(skill_resolution.copies),
+            *hook_resolution.copy_files,
+            *agent_resolution.copy_files,
+        ],
         skill_resolution.copies,
         skill_resolution.obsolete_copy_targets,
         hook_resolution.copies,
         hook_resolution.obsolete_copy_targets,
+        agent_resolution.copies,
+        agent_resolution.obsolete_copy_targets,
         obsolete_generated_files(cwd, hook_resolution),
     )
 
@@ -195,6 +216,28 @@ def _resolve_skills(
     if "skills" not in config:
         return SkillResolution([], [], [])
     return resolve_project_skills(config, cwd, codex_home, codexmgr_home, previous_lock)
+
+
+def _resolve_agents(
+    config: dict[str, Any],
+    cwd: Path,
+    codexmgr_home: Path,
+    previous_lock: dict[str, Any],
+) -> AgentResolution:
+    """Resolve custom agents only when the project config owns the agents table.
+
+    Args:
+        config: Parsed project codexmgr configuration.
+        cwd: Project directory.
+        codexmgr_home: codexmgr home directory.
+        previous_lock: Existing codexmgr lock data.
+
+    Returns:
+        Resolved custom-agent state.
+    """
+    if "agents" not in config:
+        return empty_agent_resolution()
+    return resolve_project_agents(config, cwd, codexmgr_home, previous_lock)
 
 
 def _resolve_hooks(

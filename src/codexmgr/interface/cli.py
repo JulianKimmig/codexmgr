@@ -21,6 +21,7 @@ from ..commands.health import run_doctor, run_status
 from ..commands.navigation import run_codexmgr_home_action
 from ..core.errors import CommandError
 from ..core.paths import global_codex_dir, global_codexmgr_dir
+from ..custom_agents.cli import run_agents_command
 from ..mcp.cli import run_mcp_command
 from ..packages.cli import run_package_command
 from ..project.apply import apply_project_config, setup_project
@@ -156,6 +157,9 @@ def _dispatch(
 
     if args.command == "agentsmd" and args.agentsmd_command == "remove":
         return run_agentsmd_mutation(args, cwd, codex_home, codexmgr_home, stdout)
+
+    if args.command == "agents":
+        return run_agents_command(args, cwd, codex_home, codexmgr_home, stdout)
 
     if args.command == "skill":
         return run_skill_command(args, cwd, codex_home, codexmgr_home, stdout)

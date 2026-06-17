@@ -8,6 +8,8 @@ from ..agents.file import render_managed_agents_md
 from ..agents.renderer import render_agents_markdown
 from ..core.paths import agents_md_path, codex_config_path, lock_path
 from ..core.toml_io import dump_toml, ensure_toml_table, load_optional_toml_file
+from ..custom_agents.copies import agent_copy_lock_entries
+from ..custom_agents.resolution import AgentResolution
 from ..hooks.resolution import HookResolution, hook_lock_data, hooks_json_file
 from ..hooks.sources import project_hooks_json_path
 from ..mcp.apply import apply_mcp_overrides, mcp_lock_data
@@ -79,15 +81,17 @@ def build_generated_files(
 def build_lock_data(
     config: dict[str, Any],
     locked_agents_md: dict[str, Any],
+    agent_resolution: AgentResolution,
     skill_resolution: SkillResolution,
     hook_resolution: HookResolution,
     mcp_overrides: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    """Build lockfile data for configured AGENTS.md, skills, hooks, and MCP.
+    """Build lockfile data for configured AGENTS.md, agents, skills, hooks, and MCP.
 
     Args:
         config: Parsed project codexmgr configuration.
         locked_agents_md: Resolved AGENTS.md source data.
+        agent_resolution: Resolved custom-agent configuration and copy state.
         skill_resolution: Resolved skill configuration and copy state.
         hook_resolution: Resolved hook configuration and copy state.
         mcp_overrides: Resolved MCP server overrides.
@@ -98,6 +102,14 @@ def build_lock_data(
     lock_data: dict[str, Any] = {}
     if "agents_md" in config:
         lock_data["agents_md"] = locked_agents_md
+    if "agents" in config:
+        lock_data["agents"] = {
+            "enabled": agent_resolution.enabled,
+            "disabled": agent_resolution.disabled,
+        }
+        copy_entries = agent_copy_lock_entries(agent_resolution.copies)
+        if copy_entries:
+            lock_data["agents"]["copies"] = copy_entries
     if "skills" in config:
         lock_data["skills"] = {"config": skill_resolution.entries}
         copy_entries = copy_lock_entries(skill_resolution.copies)

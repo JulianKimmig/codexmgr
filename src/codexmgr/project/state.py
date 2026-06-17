@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..custom_agents.copies import AgentCopy
 from ..skills.copies import SkillCopy
 
 
@@ -31,6 +32,8 @@ class ProjectBuild:
         obsolete_skill_copy_targets: Previous managed skill directories to remove.
         hook_copies: Managed hook directories to overlay-copy on apply.
         obsolete_hook_copy_targets: Previous managed hook directories to remove.
+        agent_copies: Managed custom-agent files to copy on apply.
+        obsolete_agent_copy_targets: Previous managed agent files to remove.
         obsolete_file_targets: Previously generated files to remove.
     """
 
@@ -40,4 +43,6 @@ class ProjectBuild:
     obsolete_skill_copy_targets: list[Path]
     hook_copies: list[Any]
     obsolete_hook_copy_targets: list[Path]
+    agent_copies: list[AgentCopy]
+    obsolete_agent_copy_targets: list[Path]
     obsolete_file_targets: list[Path]

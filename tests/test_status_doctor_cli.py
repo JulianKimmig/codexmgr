@@ -8,7 +8,7 @@ def test_status_reports_configured_state_and_sync_status(
     write_home_template,
     run_cli_with_homes,
 ):
-    """status prints configured snippets, skills, hooks, and sync state."""
+    """status prints configured snippets, skills, hooks, agents, and sync state."""
     project, codex_home = workspace
     codexmgr_home = codex_home.parent / "codexmgr-home"
     write_home_template(
@@ -21,12 +21,19 @@ text = "current"
     )
     _write_skill(codex_home, "review")
     _write_hook_bundle(codexmgr_home, "rules-hook")
+    _write_agent(codexmgr_home, "rule-retriever")
 
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
     run_cli_with_homes(["agentsmd", "add", "coding"], project, codex_home, codexmgr_home)
     run_cli_with_homes(["skill", "enable", "review"], project, codex_home, codexmgr_home)
     run_cli_with_homes(
         ["hooks", "enable", "rules-hook"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+    run_cli_with_homes(
+        ["agents", "enable", "rule-retriever"],
         project,
         codex_home,
         codexmgr_home,
@@ -48,6 +55,8 @@ text = "current"
     assert "Disabled skills: none" in stdout
     assert "Enabled hooks: rules-hook" in stdout
     assert "Disabled hooks: none" in stdout
+    assert "Enabled agents: rule-retriever" in stdout
+    assert "Disabled agents: none" in stdout
     assert "Generated files: in sync" in stdout
 
 
@@ -178,6 +187,36 @@ disabled = []
     assert "ERROR Out of sync: .codex/hooks.json" in stdout
 
 
+def test_doctor_reports_missing_enabled_agent_and_stale_outputs(
+    workspace,
+    run_cli_with_homes,
+):
+    """doctor reports missing enabled custom-agent files and stale outputs."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    (project / ".codex" / "codexmgr.toml").write_text(
+        '''
+[agents]
+enabled = ["missing-agent"]
+disabled = []
+''',
+        encoding="utf-8",
+    )
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["doctor"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert "ERROR Missing enabled agent: missing-agent" in stdout
+    assert "ERROR Out of sync: .codex/codexmgr.lock" in stdout
+
+
 def test_doctor_reports_stale_managed_skill_copy(workspace, run_cli_with_homes):
     """doctor reports stale managed skill copies."""
     project, codex_home = workspace
@@ -233,6 +272,23 @@ def _write_skill(codex_home, name):
     skill_file = skill_dir / "SKILL.md"
     skill_file.write_text("# Skill\n", encoding="utf-8")
     return skill_file
+
+
+def _write_agent(home, name):
+    """Create a named custom agent under CODEXMGR_HOME.
+
+    Args:
+        home: Codexmgr home directory where the agent should be created.
+        name: Agent file stem.
+
+    Returns:
+        Path to the created custom-agent TOML file.
+    """
+    agents_dir = home / "agents"
+    agents_dir.mkdir(parents=True)
+    path = agents_dir / f"{name}.toml"
+    path.write_text('name = "agent"\n', encoding="utf-8")
+    return path
 
 
 def _write_hook_bundle(home, name):

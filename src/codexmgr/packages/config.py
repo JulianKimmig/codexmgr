@@ -9,7 +9,7 @@ from ..core.errors import CommandError
 from ..core.toml_io import load_toml_file, plain_toml_value
 from .sources import require_package_config
 
-SUPPORTED_KEYS = ("agentsmd", "hooks", "skills")
+SUPPORTED_KEYS = ("agentsmd", "agents", "hooks", "skills")
 TOP_LEVEL_KEYS = (*SUPPORTED_KEYS, "profiles")
 
 
@@ -19,11 +19,13 @@ class PackageEntries:
 
     Attributes:
         agentsmd: AGENTS.md template references to add or remove.
+        agents: Custom-agent names to enable or disable.
         hooks: Hook bundle names to enable or disable.
         skills: Skill references to enable or disable.
     """
 
     agentsmd: list[str]
+    agents: list[str]
     hooks: list[str]
     skills: list[str]
 
@@ -35,6 +37,7 @@ class PackageConfig:
     Attributes:
         name: Bare package name.
         agentsmd: AGENTS.md template references to add or remove.
+        agents: Custom-agent names to enable or disable.
         hooks: Hook bundle names to enable or disable.
         skills: Skill references to enable or disable.
         profiles: Optional named profile entries keyed by profile name.
@@ -42,6 +45,7 @@ class PackageConfig:
 
     name: str
     agentsmd: list[str]
+    agents: list[str]
     hooks: list[str]
     skills: list[str]
     profiles: dict[str, PackageEntries]
@@ -81,11 +85,12 @@ def parse_package_config(
         raise CommandError(f"Unsupported package config key: {unsupported[0]}")
     if not any(key in data for key in TOP_LEVEL_KEYS):
         raise CommandError(
-            f"Package config must include agentsmd, hooks, skills, or profiles: {path}"
+            f"Package config must include agentsmd, agents, hooks, skills, or profiles: {path}"
         )
     return PackageConfig(
         name=name,
         agentsmd=_string_list(data, "agentsmd", path),
+        agents=_string_list(data, "agents", path),
         hooks=_string_list(data, "hooks", path),
         skills=_string_list(data, "skills", path),
         profiles=_profiles(data, path),
@@ -106,6 +111,7 @@ def selected_package_entries(
         Dedupe-preserving combined package entries.
     """
     agentsmd = list(package.agentsmd)
+    agents = list(package.agents)
     hooks = list(package.hooks)
     skills = list(package.skills)
     for profile_name in profile_names:
@@ -115,9 +121,10 @@ def selected_package_entries(
                 f"Package profile not found: {package.name}.{profile_name}"
             )
         agentsmd = _append_unique(agentsmd, profile.agentsmd)
+        agents = _append_unique(agents, profile.agents)
         hooks = _append_unique(hooks, profile.hooks)
         skills = _append_unique(skills, profile.skills)
-    return PackageEntries(agentsmd=agentsmd, hooks=hooks, skills=skills)
+    return PackageEntries(agentsmd=agentsmd, agents=agents, hooks=hooks, skills=skills)
 
 
 def _profiles(data: Mapping[str, Any], path: Path) -> dict[str, PackageEntries]:
@@ -144,6 +151,7 @@ def _profiles(data: Mapping[str, Any], path: Path) -> dict[str, PackageEntries]:
             )
         parsed[name] = PackageEntries(
             agentsmd=_string_list(table, "agentsmd", path),
+            agents=_string_list(table, "agents", path),
             hooks=_string_list(table, "hooks", path),
             skills=_string_list(table, "skills", path),
         )
