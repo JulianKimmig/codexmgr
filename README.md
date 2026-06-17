@@ -24,22 +24,33 @@ Use `codexmgr` when you want to:
 ## Requirements
 
 - Python 3.11 or newer
-- `uv` for local development
 - `codex` on `PATH` only when using `codexmgr codex ...`
 
 ## Install
 
-From a checkout:
+Install `codexmgr` as a command-line tool from the published Python package.
+`pipx` keeps the tool isolated from project environments:
 
 ```bash
-uv sync --group dev
-uv run codexmgr --help
+pipx install codexmgr
 ```
 
-For local command-line use from this repository:
+If you use `uv` for tools:
 
 ```bash
-uv tool install .
+uv tool install codexmgr
+```
+
+Plain `pip` also works, preferably inside an environment you control:
+
+```bash
+python -m pip install codexmgr
+```
+
+Verify the install:
+
+```bash
+codexmgr --help
 ```
 
 ## Quick Start
@@ -460,6 +471,8 @@ tables remain the source of truth.
 replace earlier values, while list values append.
 
 ## Development
+
+Use a checkout when developing `codexmgr` itself.
 
 Install dependencies:
 
