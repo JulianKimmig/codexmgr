@@ -76,6 +76,49 @@ async def test_tui_app_does_not_rebuild_skill_list_on_toggle(
         assert calls["count"] == 1
 
 
+@pytest.mark.asyncio
+async def test_tui_app_toggles_package_profile_and_saves_without_sync(
+    workspace,
+    write_home_template,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """The Packages screen lets users select a package profile row."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    write_home_template(codexmgr_home, "strict-coding", "[rules]\ntext = \"strict\"\n")
+    _write_skill(codexmgr_home, "strict-review")
+    _write_package(
+        codexmgr_home,
+        "repo-rules",
+        '''
+[profiles.strict]
+agentsmd = ["strict-coding"]
+skills = ["strict-review"]
+''',
+    )
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    app = CodexMgrTui(
+        cwd=project,
+        codex_home=codex_home,
+        codexmgr_home=codexmgr_home,
+        no_sync=True,
+        show_diff=False,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("5")
+        await pilot.press("down")
+        await pilot.press("space")
+        await pilot.press("s")
+        await pilot.pause()
+
+    assert read_project_config(project) == {
+        "agents_md": {"src": ["strict-coding"]},
+        "skills": {"enabled": ["strict-review"], "disabled": []},
+    }
+
+
 def _write_skill(home, name):
     """Create a codexmgr-home skill for tests.
 
@@ -91,3 +134,21 @@ def _write_skill(home, name):
     skill_file = skill_dir / "SKILL.md"
     skill_file.write_text("# Skill\n", encoding="utf-8")
     return skill_file
+
+
+def _write_package(home, name, content):
+    """Create a codexmgr-home package for tests.
+
+    Args:
+        home: Codexmgr home directory.
+        name: Package directory name.
+        content: Package config TOML.
+
+    Returns:
+        Path to the created config.toml file.
+    """
+    package_dir = home / "packages" / name
+    package_dir.mkdir(parents=True)
+    path = package_dir / "config.toml"
+    path.write_text(content, encoding="utf-8")
+    return path

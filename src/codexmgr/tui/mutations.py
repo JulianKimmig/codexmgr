@@ -8,35 +8,35 @@ from ..core.paths import resolve_template
 from ..core.toml_io import ensure_toml_table
 from ..hooks.config import hook_lists
 from ..hooks.sources import require_hook_source
-from ..packages.config import PackageConfig
+from ..packages.config import PackageEntries
 from ..project.config import agents_md_sources
 from ..skills.config import _skill_lists
 
 
 def validate_package_enable(
-    package: PackageConfig,
+    entries: PackageEntries,
     cwd: Path,
     codexmgr_home: Path,
 ) -> None:
     """Validate package references that require enable-time validation.
 
     Args:
-        package: Package configuration to validate.
+        entries: Package entries to validate.
         cwd: Project directory used for path-backed AGENTS.md templates.
         codexmgr_home: Codexmgr home containing reusable resources.
     """
-    for reference in package.agentsmd:
+    for reference in entries.agentsmd:
         resolve_template(reference, cwd, codexmgr_home)
-    for hook in package.hooks:
+    for hook in entries.hooks:
         require_hook_source(hook, codexmgr_home)
 
 
-def package_checks(config: MutableMapping[str, Any], package: PackageConfig) -> list[bool]:
-    """Return per-entry active checks for one package.
+def package_checks(config: MutableMapping[str, Any], entries: PackageEntries) -> list[bool]:
+    """Return per-entry active checks for package entries.
 
     Args:
         config: Staged codexmgr.toml document.
-        package: Package configuration.
+        entries: Package entries to inspect.
 
     Returns:
         Boolean active states for all package entries.
@@ -45,9 +45,9 @@ def package_checks(config: MutableMapping[str, Any], package: PackageConfig) -> 
     enabled_hooks, _ = hook_lists(config)
     sources = agents_md_sources(config)
     return [
-        *(reference in sources for reference in package.agentsmd),
-        *(skill in enabled_skills for skill in package.skills),
-        *(hook in enabled_hooks for hook in package.hooks),
+        *(reference in sources for reference in entries.agentsmd),
+        *(skill in enabled_skills for skill in entries.skills),
+        *(hook in enabled_hooks for hook in entries.hooks),
     ]
 
 

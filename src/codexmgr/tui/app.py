@@ -13,6 +13,7 @@ from ..core.errors import CommandError
 from .diff import staged_diff_lines
 from .items import agentsmd_items, hook_items, mcp_items, package_items, skill_items
 from .models import ManagedItem
+from .package_selection import set_package_selection
 from .rendering import APP_CSS, SECTION_TITLES, TUI_BINDINGS, selection_for_item
 from .state import StagedConfig, load_staged_config, save_staged_config
 
@@ -177,7 +178,7 @@ class CodexMgrTui(App[int]):
         elif self.section == "hooks":
             self.staged.set_hook_selected(value, selected)
         elif self.section == "packages":
-            self.staged.set_package_enabled(value, selected)
+            set_package_selection(self.staged, value, selected)
         elif self.section == "mcp":
             self.staged.set_mcp_selected(value, selected)
 
@@ -202,7 +203,7 @@ class CodexMgrTui(App[int]):
             items.add_options(selection_for_item(item) for item in rendered_items)
             if rendered_items:
                 items.highlighted = 0
-            self._selected_values = {item.name for item in rendered_items if item.state == "enabled"}
+            self._selected_values = {item.selection_value() for item in rendered_items if item.state == "enabled"}
             detail.update(self._detail_text(rendered_items, warning))
             status.update(self._status_text())
             items.focus()

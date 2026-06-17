@@ -139,8 +139,9 @@ preserved. Bundle files other than the root `hooks.json` are copied into
 `.codex/hooks/<name>`.
 
 Packaged configurations resolve from
-`$CODEXMGR_HOME/packages/<name>/config.toml`. A package config is a flat TOML
-file that can contain `agentsmd`, `hooks`, and `skills` string lists:
+`$CODEXMGR_HOME/packages/<name>/config.toml`. A package config is a TOML
+document that can contain root `agentsmd`, `hooks`, and `skills` string lists
+plus optional profile tables:
 
 ```toml
 agentsmd = []
@@ -185,6 +186,7 @@ configuration. It shows AGENTS.md templates, skills, hooks, packages, and MCP
 server enable overrides in selectable lists. Changes are staged in memory while
 you navigate and toggle entries. Press `s` to save; the save writes
 `.codex/codexmgr.toml` once and runs `apply` once unless `--no-sync` was used.
+Package profiles appear as separate selectable rows under their package.
 
 ```bash
 codexmgr tui

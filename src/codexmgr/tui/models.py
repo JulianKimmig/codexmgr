@@ -12,12 +12,23 @@ class ManagedItem:
         state: Current state label such as enabled, disabled, or available.
         missing: Whether the configured resource cannot currently be resolved.
         detail: Optional extra context for display.
+        value: Optional stable selection value, used when the display label is
+            not sufficient to identify the selected resource.
     """
 
     name: str
     state: str
     missing: bool = False
     detail: str = ""
+    value: str = ""
+
+    def selection_value(self) -> str:
+        """Return the stable value used by selection widgets.
+
+        Returns:
+            Explicit value when configured, otherwise the display name.
+        """
+        return self.value or self.name
 
 
 @dataclass(frozen=True)

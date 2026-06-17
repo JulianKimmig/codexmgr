@@ -9,11 +9,13 @@ from ..hooks.config import hook_lists
 from ..hooks.sources import available_hook_names, resolve_hook_source
 from ..mcp.config import resolve_overrides
 from ..mcp.discovery import available_state, discover_codex_servers
+from ..packages.config import load_package_config
 from ..packages.sources import available_package_names
 from ..project.config import agents_md_sources
 from ..skills.config import _skill_lists
 from ..skills.sources import available_skill_names, resolve_skill_file
 from .models import DashboardSummary, ManagedItem
+from .package_refs import package_profile_value, package_value
 from .state import StagedConfig
 
 
@@ -105,10 +107,26 @@ def package_items(staged: StagedConfig) -> list[ManagedItem]:
     items: list[ManagedItem] = []
     for name in available_package_names(staged.codexmgr_home):
         try:
-            state = staged.package_state(name)
-            items.append(ManagedItem(name, state))
+            package = load_package_config(name, staged.codexmgr_home)
+            items.append(
+                ManagedItem(
+                    name,
+                    staged.package_state(name),
+                    detail="package",
+                    value=package_value(name),
+                ),
+            )
+            for profile in sorted(package.profiles):
+                items.append(
+                    ManagedItem(
+                        f"{name} / {profile}",
+                        staged.package_profile_state(name, profile),
+                        detail="profile",
+                        value=package_profile_value(name, profile),
+                    ),
+                )
         except CommandError as exc:
-            items.append(ManagedItem(name, "error", True, str(exc)))
+            items.append(ManagedItem(name, "error", True, str(exc), package_value(name)))
     return items
 
 

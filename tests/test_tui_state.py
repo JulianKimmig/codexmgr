@@ -5,6 +5,7 @@ import json
 from codexmgr.interface.parser import build_parser
 from codexmgr.project.sync import generated_file_diffs
 from codexmgr.tui.diff import staged_diff_lines
+from codexmgr.tui.items import package_items
 from codexmgr.tui.state import load_staged_config, save_staged_config
 
 
@@ -151,6 +152,92 @@ skills = ["repo-rule-manager"]
     staged = load_staged_config(project, codex_home, codexmgr_home)
 
     assert staged.package_state("repo-rules") == "partial"
+
+
+def test_staged_package_profile_toggle_updates_profile_entries(
+    workspace,
+    write_home_template,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """Package profiles can be toggled independently from package root entries."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    write_home_template(codexmgr_home, "coding", "[rules]\ntext = \"rendered\"\n")
+    write_home_template(codexmgr_home, "strict-coding", "[rules]\ntext = \"strict\"\n")
+    _write_skill(codexmgr_home, "repo-rule-manager")
+    _write_skill(codexmgr_home, "strict-review")
+    _write_package(
+        codexmgr_home,
+        "repo-rules",
+        '''
+agentsmd = ["coding"]
+skills = ["repo-rule-manager"]
+
+[profiles.strict]
+agentsmd = ["strict-coding"]
+skills = ["strict-review"]
+''',
+    )
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+
+    staged = load_staged_config(project, codex_home, codexmgr_home)
+    staged.set_package_enabled("repo-rules", True)
+    staged.set_package_profile_enabled("repo-rules", "strict", True)
+
+    assert staged.package_state("repo-rules") == "enabled"
+    assert staged.package_profile_state("repo-rules", "strict") == "enabled"
+    save_staged_config(staged, no_sync=True)
+
+    assert read_project_config(project) == {
+        "agents_md": {"src": ["coding", "strict-coding"]},
+        "skills": {
+            "enabled": ["repo-rule-manager", "strict-review"],
+            "disabled": [],
+        },
+    }
+
+    staged = load_staged_config(project, codex_home, codexmgr_home)
+    staged.set_package_profile_enabled("repo-rules", "strict", False)
+    save_staged_config(staged, no_sync=True)
+
+    assert read_project_config(project) == {
+        "agents_md": {"src": ["coding"]},
+        "skills": {
+            "enabled": ["repo-rule-manager"],
+            "disabled": ["strict-review"],
+        },
+    }
+
+
+def test_package_items_include_profile_rows(
+    workspace,
+    write_home_template,
+    run_cli_with_homes,
+):
+    """The TUI package list exposes package profiles as selectable rows."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    write_home_template(codexmgr_home, "strict-coding", "[rules]\ntext = \"strict\"\n")
+    _write_skill(codexmgr_home, "strict-review")
+    _write_package(
+        codexmgr_home,
+        "repo-rules",
+        '''
+[profiles.strict]
+agentsmd = ["strict-coding"]
+skills = ["strict-review"]
+''',
+    )
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    staged = load_staged_config(project, codex_home, codexmgr_home)
+
+    items = package_items(staged)
+
+    assert [(item.name, item.value, item.detail) for item in items] == [
+        ("repo-rules", "package:repo-rules", "package"),
+        ("repo-rules / strict", "package-profile:repo-rules:strict", "profile"),
+    ]
 
 
 def test_staged_mcp_toggle_updates_enabled_field_only(

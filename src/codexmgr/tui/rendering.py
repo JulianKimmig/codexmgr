@@ -89,4 +89,4 @@ def selection_for_item(item: ManagedItem) -> Selection[str]:
         label.append("  missing", style="bold red")
     if item.detail:
         label.append(f"  {item.detail}", style="dim")
-    return Selection(label, item.name, item.state == "enabled")
+    return Selection(label, item.selection_value(), item.state == "enabled")
