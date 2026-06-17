@@ -26,6 +26,7 @@ from ..hooks.config import disable_hook, enable_hook
 from ..hooks.listing import hook_list_lines
 from ..skills.config import disable_skill, enable_skill
 from ..skills.listing import skill_list_lines
+from ..tui.cli import run_tui_command
 from .parser import build_parser
 
 
@@ -235,6 +236,9 @@ def _dispatch(
 
     if args.command == "mcp":
         return run_mcp_command(args, cwd, codex_home, codexmgr_home, stdout)
+
+    if args.command == "tui":
+        return run_tui_command(args, cwd, codex_home, codexmgr_home)
 
     if args.command == "doctor":
         return run_doctor(cwd, codex_home, codexmgr_home, stdout)

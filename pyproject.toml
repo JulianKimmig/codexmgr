@@ -5,6 +5,7 @@ description = "Manage project-local Codex configuration from reusable templates"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "textual>=8.2.7",
     "tomlkit>=0.15.0",
 ]
 keywords = ["codex", "cli", "configuration", "agents", "skills"]
@@ -27,6 +28,7 @@ codexmgr = "codexmgr.interface.cli:entrypoint"
 dev = [
     "pytest>=9.0.3",
     "pyyaml>=6.0.3",
+    "pytest-asyncio>=1.4.0",
 ]
 
 [build-system]

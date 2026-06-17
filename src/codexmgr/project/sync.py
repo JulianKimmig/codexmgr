@@ -5,8 +5,8 @@ from difflib import unified_diff
 from pathlib import Path
 from typing import TextIO
 
-from .apply import build_project_state
-from .state import GeneratedFile
+from .apply import build_project_state, build_project_state_from_config
+from .state import GeneratedFile, ProjectBuild
 from ..skills.copies import SkillCopyFile
 
 
@@ -46,8 +46,42 @@ def generated_file_diffs(
     Returns:
         File differences for all out-of-sync generated outputs.
     """
-    diffs: list[FileDiff] = []
     state = build_project_state(cwd, codex_home, codexmgr_home)
+    return diffs_for_project_state(cwd, state)
+
+
+def generated_file_diffs_from_config(
+    config: dict,
+    cwd: Path,
+    codex_home: Path,
+    codexmgr_home: Path,
+) -> list[FileDiff]:
+    """Return generated-file diffs for an in-memory project config.
+
+    Args:
+        config: Parsed codexmgr configuration to evaluate.
+        cwd: Project directory whose generated files should be checked.
+        codex_home: Global Codex home used to resolve named skills.
+        codexmgr_home: codexmgr home used to resolve AGENTS.md templates.
+
+    Returns:
+        File differences for the supplied staged configuration.
+    """
+    state = build_project_state_from_config(config, cwd, codex_home, codexmgr_home)
+    return diffs_for_project_state(cwd, state)
+
+
+def diffs_for_project_state(cwd: Path, state: ProjectBuild) -> list[FileDiff]:
+    """Return generated-file diffs for an already built project state.
+
+    Args:
+        cwd: Project directory used for relative display paths.
+        state: Expected generated project state.
+
+    Returns:
+        File differences for all out-of-sync generated outputs.
+    """
+    diffs: list[FileDiff] = []
     for generated_file in state.files:
         diff = _text_file_diff(cwd, generated_file)
         if diff is not None:
@@ -88,11 +122,23 @@ def check_project_sync(
         stdout.write("Project Codex configuration is in sync\n")
         return 0
     if show_diff:
-        stdout.write("".join(line for diff in diffs for line in _format_diff(diff)))
+        stdout.write(format_file_diffs(diffs))
     else:
         for diff in diffs:
             stdout.write(f"Out of sync: {diff.relative_path}\n")
     return 1
+
+
+def format_file_diffs(diffs: list[FileDiff]) -> str:
+    """Format file diffs as one unified diff string.
+
+    Args:
+        diffs: File differences to format.
+
+    Returns:
+        Unified diff text for all supplied differences.
+    """
+    return "".join(line for diff in diffs for line in _format_diff(diff))
 
 
 def _format_diff(diff: FileDiff) -> list[str]:

@@ -13,6 +13,7 @@ The tool is intentionally narrow:
 - enable or disable reusable Codex hook bundles per project
 - enable or disable packaged sets of AGENTS.md, skill, and hook settings
 - enable, disable, inspect, and update safe project-local MCP overrides
+- use an interactive terminal UI for common project management tasks
 - write reproducible lock data for the resolved project configuration
 - run `codex` with project `.codex/config.toml` values translated into `-c`
   overrides
@@ -157,6 +158,26 @@ Mutating commands run `apply` automatically unless `--no-sync` is passed.
 Project guidelines require `apply` whenever `.codex/codexmgr.toml` changes,
 unless `--no-sync` was explicitly requested.
 
+## Interactive TUI
+
+`codexmgr tui` opens a Textual-based terminal UI for managing project-local
+configuration. It shows AGENTS.md templates, skills, hooks, packages, and MCP
+server enable overrides in selectable lists. Changes are staged in memory while
+you navigate and toggle entries. Press `s` to save; the save writes
+`.codex/codexmgr.toml` once and runs `apply` once unless `--no-sync` was used.
+
+```bash
+codexmgr tui
+codexmgr tui --no-sync
+codexmgr tui --show-diff
+```
+
+The dashboard shows generated-file sync state. By default it lists stale
+generated paths; with `--show-diff`, it shows unified diffs for the staged
+configuration. MCP editing in the TUI is intentionally limited to the
+project-local `enabled` override. Advanced MCP fields remain available through
+the classic `codexmgr mcp ...` commands.
+
 ## Template Format
 
 Template files are TOML documents. Each top-level key must be a table and
@@ -194,6 +215,7 @@ codexmgr apply --diff
 codexmgr cd [--path | --explorer | --terminal]
 codexmgr doctor
 codexmgr status
+codexmgr tui [--no-sync] [--show-diff]
 codexmgr agentsmd list
 codexmgr agentsmd show <name-or-template-path>
 codexmgr agentsmd validate <name-or-template-path>

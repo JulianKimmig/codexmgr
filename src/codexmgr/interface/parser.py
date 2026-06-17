@@ -3,6 +3,7 @@
 import argparse
 
 from ..commands.navigation import add_cd_arguments
+from .parsers.mcp import add_mcp_parser
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -22,7 +23,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_skill_parser(subparsers)
     _add_hooks_parser(subparsers)
     _add_package_parser(subparsers)
-    _add_mcp_parser(subparsers)
+    add_mcp_parser(subparsers, _add_no_sync_argument)
+    _add_tui_parser(subparsers)
     _add_init_template_parser(subparsers)
     subparsers.add_parser("doctor", help="Check project configuration health")
     subparsers.add_parser("status", help="Summarize project codexmgr state")
@@ -181,8 +183,8 @@ def _add_package_parser(subparsers: argparse._SubParsersAction) -> None:
     disable.add_argument("package", help="Package name")
 
 
-def _add_mcp_parser(subparsers: argparse._SubParsersAction) -> None:
-    """Add MCP user config management parsers.
+def _add_tui_parser(subparsers: argparse._SubParsersAction) -> None:
+    """Add the interactive TUI parser.
 
     Args:
         subparsers: Top-level subparser action.
@@ -190,73 +192,13 @@ def _add_mcp_parser(subparsers: argparse._SubParsersAction) -> None:
     Returns:
         None. The parser is mutated in place.
     """
-    mcp = subparsers.add_parser("mcp", help="Manage project MCP server overrides")
-    mcp_subparsers = mcp.add_subparsers(dest="mcp_command", required=True)
-
-    mcp_subparsers.add_parser("list", help="List project MCP server overrides")
-
-    show = mcp_subparsers.add_parser("show", help="Show one project MCP override")
-    show.add_argument("server_id", help="MCP server id")
-
-    enable = mcp_subparsers.add_parser("enable", help="Enable an MCP server locally")
-    _add_no_sync_argument(enable)
-    enable.add_argument("server_id", help="MCP server id")
-
-    disable = mcp_subparsers.add_parser("disable", help="Disable an MCP server locally")
-    _add_no_sync_argument(disable)
-    disable.add_argument("server_id", help="MCP server id")
-
-    token = mcp_subparsers.add_parser(
-        "set-token-env",
-        help="Set bearer_token_env_var in a project MCP override",
+    tui = subparsers.add_parser("tui", help="Open the interactive project manager")
+    _add_no_sync_argument(tui)
+    tui.add_argument(
+        "--show-diff",
+        action="store_true",
+        help="Show unified generated-file diffs in the dashboard",
     )
-    _add_no_sync_argument(token)
-    token.add_argument("server_id", help="MCP server id")
-    token.add_argument("env_var", help="Environment variable name")
-
-    add_env = mcp_subparsers.add_parser(
-        "add-env-var",
-        help="Forward an environment variable in a project MCP override",
-    )
-    _add_no_sync_argument(add_env)
-    add_env.add_argument("server_id", help="MCP server id")
-    add_env.add_argument("env_var", help="Environment variable name")
-
-    remove_env = mcp_subparsers.add_parser(
-        "remove-env-var",
-        help="Stop forwarding an environment variable by string entry",
-    )
-    _add_no_sync_argument(remove_env)
-    remove_env.add_argument("server_id", help="MCP server id")
-    remove_env.add_argument("env_var", help="Environment variable name")
-
-    set_header = mcp_subparsers.add_parser(
-        "set-env-header",
-        help="Map an HTTP header to an environment variable",
-    )
-    _add_no_sync_argument(set_header)
-    set_header.add_argument("server_id", help="MCP server id")
-    set_header.add_argument("header", help="HTTP header name")
-    set_header.add_argument("env_var", help="Environment variable name")
-
-    unset_header = mcp_subparsers.add_parser(
-        "unset-env-header",
-        help="Remove an env_http_headers mapping",
-    )
-    _add_no_sync_argument(unset_header)
-    unset_header.add_argument("server_id", help="MCP server id")
-    unset_header.add_argument("header", help="HTTP header name")
-
-    set_field = mcp_subparsers.add_parser(
-        "set-field",
-        help="Set an allowlisted non-secret MCP field from a TOML value",
-    )
-    _add_no_sync_argument(set_field)
-    set_field.add_argument("server_id", help="MCP server id")
-    set_field.add_argument("field", help="Allowlisted field name")
-    set_field.add_argument("value", help="TOML value literal")
-
-    mcp_subparsers.add_parser("validate", help="Validate MCP config")
 
 
 def _add_init_template_parser(subparsers: argparse._SubParsersAction) -> None:

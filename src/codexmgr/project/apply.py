@@ -1,5 +1,6 @@
 """Project-level codexmgr orchestration commands."""
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -88,6 +89,26 @@ def build_project_state(
         Expected generated project state.
     """
     config = load_required_project_config(cwd)
+    return build_project_state_from_config(config, cwd, codex_home, codexmgr_home)
+
+
+def build_project_state_from_config(
+    config: Mapping[str, Any],
+    cwd: Path,
+    codex_home: Path,
+    codexmgr_home: Path,
+) -> ProjectBuild:
+    """Build expected generated state from an in-memory project config.
+
+    Args:
+        config: Parsed codexmgr configuration to evaluate.
+        cwd: Project directory whose generated files should be checked.
+        codex_home: Global Codex home used to resolve named skills.
+        codexmgr_home: codexmgr home used to resolve named sources.
+
+    Returns:
+        Expected generated project state for the supplied configuration.
+    """
     previous_lock = load_optional_toml_file(lock_path(cwd))
     locked_agents_md = resolve_locked_agents_md(config, cwd, codexmgr_home)
     skill_resolution = _resolve_skills(config, cwd, codex_home, codexmgr_home, previous_lock)

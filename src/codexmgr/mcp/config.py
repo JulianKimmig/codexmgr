@@ -11,10 +11,16 @@ from .fields import (
     validate_field,
     validate_override,
 )
+from .tables import (
+    add_env_var_value,
+    ensure_server,
+    env_headers,
+    remove_env_var_value,
+    set_enabled_value,
+)
 from ..core.errors import CommandError
 from ..core.paths import config_path
 from ..core.toml_io import (
-    ensure_toml_table,
     load_optional_toml_file,
     plain_toml_value,
     write_toml_file,
@@ -95,7 +101,28 @@ def set_enabled(cwd: Path, server_id: str, enabled: bool) -> str:
     Returns:
         Updated server id.
     """
-    return _mutate_server(cwd, server_id, lambda table: table.__setitem__("enabled", enabled))
+    return _mutate_server(cwd, server_id, lambda table: set_enabled_value(table, enabled))
+
+
+def set_enabled_in_config(
+    config: MutableMapping[str, Any],
+    server_id: str,
+    enabled: bool,
+) -> str:
+    """Set an MCP enabled override in a parsed project config.
+
+    Args:
+        config: Parsed codexmgr.toml data to mutate.
+        server_id: MCP server id.
+        enabled: Desired enabled state.
+
+    Returns:
+        Updated server id.
+    """
+    server = ensure_server(config, server_id)
+    set_enabled_value(server, enabled)
+    validate_override(server_id, server, strict=True)
+    return server_id
 
 
 def set_token_env(cwd: Path, server_id: str, env_var: str) -> str:
@@ -127,7 +154,7 @@ def add_env_var(cwd: Path, server_id: str, env_var: str) -> str:
     Returns:
         Updated server id.
     """
-    return _mutate_server(cwd, server_id, lambda table: _add_env_var(table, env_var))
+    return _mutate_server(cwd, server_id, lambda table: add_env_var_value(table, env_var))
 
 
 def remove_env_var(cwd: Path, server_id: str, env_var: str) -> str:
@@ -141,7 +168,7 @@ def remove_env_var(cwd: Path, server_id: str, env_var: str) -> str:
     Returns:
         Updated server id.
     """
-    return _mutate_server(cwd, server_id, lambda table: _remove_env_var(table, env_var))
+    return _mutate_server(cwd, server_id, lambda table: remove_env_var_value(table, env_var))
 
 
 def set_env_header(cwd: Path, server_id: str, header: str, env_var: str) -> str:
@@ -159,7 +186,7 @@ def set_env_header(cwd: Path, server_id: str, header: str, env_var: str) -> str:
     return _mutate_server(
         cwd,
         server_id,
-        lambda table: _env_headers(table).__setitem__(header, env_var),
+        lambda table: env_headers(table).__setitem__(header, env_var),
     )
 
 
@@ -177,7 +204,7 @@ def unset_env_header(cwd: Path, server_id: str, header: str) -> str:
     return _mutate_server(
         cwd,
         server_id,
-        lambda table: _env_headers(table).pop(header, None),
+        lambda table: env_headers(table).pop(header, None),
     )
 
 
@@ -213,81 +240,8 @@ def _mutate_server(cwd: Path, server_id: str, mutation: Mutation) -> str:
     """
     require_codex_dir(cwd)
     config = load_optional_toml_file(config_path(cwd))
-    server = _ensure_server(config, server_id)
+    server = ensure_server(config, server_id)
     mutation(server)
     validate_override(server_id, server, strict=True)
     write_toml_file(config_path(cwd), config)
     return server_id
-
-
-def _ensure_server(
-    config: MutableMapping[str, Any],
-    server_id: str,
-) -> MutableMapping[str, Any]:
-    """Return or create one project MCP server override table.
-
-    Args:
-        config: Project config document.
-        server_id: MCP server id.
-
-    Returns:
-        Mutable server override table.
-    """
-    mcp = ensure_toml_table(config, "mcp", "codexmgr.toml [mcp] must be a table")
-    servers = ensure_toml_table(mcp, "servers", "codexmgr.toml [mcp.servers] must be a table")
-    return ensure_toml_table(
-        servers,
-        server_id,
-        f"codexmgr.toml mcp.servers.{server_id} must be a table",
-    )
-
-
-def _add_env_var(table: MutableMapping[str, Any], env_var: str) -> None:
-    """Add an env var to an override table.
-
-    Args:
-        table: Server override table.
-        env_var: Env var name.
-    """
-    values = _env_var_values(table)
-    if env_var not in values:
-        values.append(env_var)
-    table["env_vars"] = values
-
-
-def _remove_env_var(table: MutableMapping[str, Any], env_var: str) -> None:
-    """Remove an env var from an override table.
-
-    Args:
-        table: Server override table.
-        env_var: Env var name.
-    """
-    values = _env_var_values(table)
-    table["env_vars"] = [value for value in values if value != env_var]
-
-
-def _env_var_values(table: MutableMapping[str, Any]) -> list[str]:
-    """Return env_vars as a mutable plain list.
-
-    Args:
-        table: Server override table.
-
-    Returns:
-        Existing env_vars values.
-    """
-    values = plain_toml_value(table.get("env_vars", []))
-    if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
-        raise CommandError("mcp.servers env_vars must be a list of strings")
-    return values
-
-
-def _env_headers(table: MutableMapping[str, Any]) -> MutableMapping[str, Any]:
-    """Return or create the env_http_headers override table.
-
-    Args:
-        table: Server override table.
-
-    Returns:
-        Mutable env_http_headers table.
-    """
-    return ensure_toml_table(table, "env_http_headers", "env_http_headers must be a string map")
