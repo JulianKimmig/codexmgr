@@ -82,7 +82,7 @@ def build_jit_project_state(
             codexmgr_home,
             request.profiles,
         )
-        apply_package_entries_to_config(overlay, entries, enabled=True)
+        apply_package_entries_to_config(overlay, entries, codexmgr_home, enabled=True)
     return build_project_state_from_config(overlay, cwd, codex_home, codexmgr_home)
 
 
@@ -206,8 +206,25 @@ def _state_paths(state: ProjectBuild) -> list[Path]:
         *(skill_copy.target for skill_copy in state.skill_copies),
         *(hook_copy.target for hook_copy in state.hook_copies),
         *(agent_copy.target for agent_copy in state.agent_copies),
+        *(_rule_root(rule_copy.target) for rule_copy in state.rule_copies),
         *state.obsolete_file_targets,
         *state.obsolete_skill_copy_targets,
         *state.obsolete_hook_copy_targets,
         *state.obsolete_agent_copy_targets,
+        *(_rule_root(target) for target in state.obsolete_rule_copy_targets),
     ]
+
+
+def _rule_root(path: Path) -> Path:
+    """Return the `.rules` ancestor for a rule file path.
+
+    Args:
+        path: Rule copy path or obsolete rule target.
+
+    Returns:
+        The nearest `.rules` ancestor, or the original path when absent.
+    """
+    for parent in [path, *path.parents]:
+        if parent.name == ".rules":
+            return parent
+    return path

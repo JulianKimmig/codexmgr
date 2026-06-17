@@ -93,6 +93,79 @@ skills = ["repo-rule-manager"]
     ).read_text(encoding="utf-8") == "print('rules')\n"
 
 
+def test_package_enable_applies_rules_and_profiles(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """Package root and profile rules are enabled and copied."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_rule(codexmgr_home, "react/components.md", "# Components\n")
+    _write_rule(codexmgr_home, "python/testing.md", "# Testing\n")
+    _write_package(
+        codexmgr_home,
+        "frontend",
+        '''
+rules = ["react/"]
+
+[profiles.python]
+rules = ["python/testing.md"]
+''',
+    )
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["package", "enable", "frontend", "--profile", "python"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert stdout == (
+        "Enabled package frontend (profiles: python)\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["rules"] == {
+        "enabled": ["react/", "python/testing.md"],
+        "disabled": [],
+    }
+    assert (project / ".rules" / "react" / "components.md").read_text() == "# Components\n"
+    assert (project / ".rules" / "python" / "testing.md").read_text() == "# Testing\n"
+
+
+def test_package_disable_disables_rules_and_removes_copies(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """Package disable records rule exclusions and removes managed files."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_rule(codexmgr_home, "react/components.md", "# Components\n")
+    _write_package(codexmgr_home, "frontend", 'rules = ["react/"]\n')
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(["package", "enable", "frontend"], project, codex_home, codexmgr_home)
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["package", "disable", "frontend"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert "Disabled package frontend" in stdout
+    assert read_project_config(project)["rules"] == {
+        "enabled": [],
+        "disabled": ["react/"],
+    }
+    assert not (project / ".rules").exists()
+
+
 def test_package_disable_disables_entries_and_removes_managed_copies(
     workspace,
     write_home_template,
@@ -514,6 +587,30 @@ def test_package_enable_rejects_missing_agent_before_writing(
     assert read_project_config(project) == {}
 
 
+def test_package_enable_rejects_missing_rule_before_writing(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """Missing rule refs fail before package config mutation."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_package(codexmgr_home, "bad", 'rules = ["missing/"]\n')
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["package", "enable", "bad"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 1
+    assert stdout == ""
+    assert "Rule not found:" in stderr
+    assert read_project_config(project) == {}
+
+
 def _write_package(codexmgr_home: Path, name: str, content: str) -> Path:
     """Create a package config under CODEXMGR_HOME.
 
@@ -590,6 +687,23 @@ def _write_hook_bundle(
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
     return hook_file
+
+
+def _write_rule(codexmgr_home: Path, relative_path: str, content: str) -> Path:
+    """Create a reusable rule file under CODEXMGR_HOME.
+
+    Args:
+        codexmgr_home: codexmgr home directory.
+        relative_path: POSIX path below the rules source root.
+        content: Rule file content.
+
+    Returns:
+        Path to the created rule file.
+    """
+    path = codexmgr_home / "rules" / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return path
 
 
 def _source_hooks() -> dict:

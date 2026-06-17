@@ -19,6 +19,7 @@ from ..commands.config_mutations import (
 )
 from ..commands.health import run_doctor, run_status
 from ..commands.navigation import run_codexmgr_home_action
+from ..commands.rules import run_rules_command
 from ..core.errors import CommandError
 from ..core.paths import global_codex_dir, global_codexmgr_dir
 from ..custom_agents.cli import run_agents_command
@@ -166,6 +167,9 @@ def _dispatch(
 
     if args.command == "hooks":
         return run_hooks_command(args, cwd, codex_home, codexmgr_home, stdout)
+
+    if args.command == "rules":
+        return run_rules_command(args, cwd, codex_home, codexmgr_home, stdout)
 
     if args.command == "package":
         return run_package_command(args, cwd, codex_home, codexmgr_home, stdout)

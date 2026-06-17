@@ -13,6 +13,7 @@ from ..custom_agents.resolution import AgentResolution
 from ..hooks.resolution import HookResolution, hook_lock_data, hooks_json_file
 from ..hooks.sources import project_hooks_json_path
 from ..mcp.apply import apply_mcp_overrides, mcp_lock_data
+from ..rules.resolution import RuleResolution, rule_lock_data
 from ..skills.copies import copy_lock_entries
 from ..skills.resolution import SkillResolution
 
@@ -84,6 +85,7 @@ def build_lock_data(
     agent_resolution: AgentResolution,
     skill_resolution: SkillResolution,
     hook_resolution: HookResolution,
+    rule_resolution: RuleResolution,
     mcp_overrides: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     """Build lockfile data for configured AGENTS.md, agents, skills, hooks, and MCP.
@@ -94,6 +96,7 @@ def build_lock_data(
         agent_resolution: Resolved custom-agent configuration and copy state.
         skill_resolution: Resolved skill configuration and copy state.
         hook_resolution: Resolved hook configuration and copy state.
+        rule_resolution: Resolved reusable-rule copy state.
         mcp_overrides: Resolved MCP server overrides.
 
     Returns:
@@ -117,6 +120,8 @@ def build_lock_data(
             lock_data["skills"]["copies"] = copy_entries
     if "hooks" in config:
         lock_data["hooks"] = hook_lock_data(hook_resolution)
+    if "rules" in config:
+        lock_data["rules"] = rule_lock_data(rule_resolution)
     if "mcp" in config:
         lock_data["mcp"] = mcp_lock_data(mcp_overrides)
     return lock_data

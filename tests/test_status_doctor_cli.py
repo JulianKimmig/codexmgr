@@ -60,6 +60,35 @@ text = "current"
     assert "Generated files: in sync" in stdout
 
 
+def test_status_reports_configured_rules(workspace, run_cli_with_homes):
+    """status prints configured enabled and disabled rules."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_rule(codexmgr_home, "react/components.md")
+    _write_rule(codexmgr_home, "react/materials/colors.md")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(["rules", "enable", "react/"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(
+        ["rules", "disable", "react/materials/"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["status"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert "Enabled rules: react/" in stdout
+    assert "Disabled rules: react/materials/" in stdout
+    assert "Generated files: in sync" in stdout
+
+
 def test_status_reports_out_of_sync_generated_files(
     workspace,
     write_home_template,
@@ -217,6 +246,58 @@ disabled = []
     assert "ERROR Out of sync: .codex/codexmgr.lock" in stdout
 
 
+def test_doctor_reports_missing_enabled_rule_but_not_disabled_rule(
+    workspace,
+    run_cli_with_homes,
+):
+    """doctor reports missing enabled rules and ignores disabled missing refs."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    (project / ".codex" / "codexmgr.toml").write_text(
+        '''
+[rules]
+enabled = ["missing/"]
+disabled = ["also-missing/"]
+''',
+        encoding="utf-8",
+    )
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["doctor"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert "ERROR Missing enabled rule: missing/" in stdout
+    assert "also-missing" not in stdout
+
+
+def test_doctor_reports_stale_managed_rule_copy(workspace, run_cli_with_homes):
+    """doctor reports stale managed rule files."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_rule(codexmgr_home, "react/components.md")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(["rules", "enable", "react/"], project, codex_home, codexmgr_home)
+    target_file = project / ".rules" / "react" / "components.md"
+    target_file.write_text("# Local edit\n", encoding="utf-8")
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["doctor"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert "ERROR Out of sync: .rules/react/components.md" in stdout
+
+
 def test_doctor_reports_stale_managed_skill_copy(workspace, run_cli_with_homes):
     """doctor reports stale managed skill copies."""
     project, codex_home = workspace
@@ -326,3 +407,11 @@ def _write_hook_bundle(home, name):
         encoding="utf-8",
     )
     return hook_file
+
+
+def _write_rule(codexmgr_home, relative_path):
+    """Create a reusable rule file under CODEXMGR_HOME."""
+    path = codexmgr_home / "rules" / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# Rule\n", encoding="utf-8")
+    return path

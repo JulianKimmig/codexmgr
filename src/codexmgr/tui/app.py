@@ -11,10 +11,9 @@ from textual.widgets import Footer, Header, Label, SelectionList, Static
 
 from ..core.errors import CommandError
 from .diff import staged_diff_lines
-from .items import agent_items, agentsmd_items, hook_items, mcp_items, package_items, skill_items
 from .models import ManagedItem
-from .package_selection import set_package_selection
 from .rendering import APP_CSS, NAV_LABELS, SECTION_TITLES, TUI_BINDINGS, selection_for_item
+from .sections import cycle_section_state, items_for_section, set_section_selected
 from .state import StagedConfig, load_staged_config, save_staged_config
 
 
@@ -60,6 +59,7 @@ class CodexMgrTui(App[int]):
         self.section = "dashboard"
         self.staged = load_staged_config(cwd, codex_home, codexmgr_home)
         self._selected_values: set[str] = set()
+        self._rendered_items: list[ManagedItem] = []
         self._refreshing = False
         self._status = "Ready"
 
@@ -130,6 +130,26 @@ class CodexMgrTui(App[int]):
         """
         self.exit(0)
 
+    def action_cycle_state(self) -> None:
+        """Cycle the highlighted row through its available states.
+
+        Returns:
+            None.
+        """
+        try:
+            items = self.query_one("#items", SelectionList)
+        except NoMatches:
+            return
+        item = self._highlighted_item(items)
+        if item is None:
+            return
+        try:
+            cycle_section_state(self.staged, self.section, item)
+            self._status = "Staged changes pending" if self.staged.dirty() else "Ready"
+        except CommandError as exc:
+            self._status = f"ERROR {exc}"
+        self._refresh_view()
+
     @on(SelectionList.SelectedChanged, "#items")
     def _selection_changed(self, event: SelectionList.SelectedChanged[str]) -> None:
         """Apply selection changes to staged config.
@@ -144,9 +164,9 @@ class CodexMgrTui(App[int]):
         disabled = self._selected_values - selected
         try:
             for value in sorted(enabled):
-                self._set_selected(value, True)
+                set_section_selected(self.staged, self.section, value, True)
             for value in sorted(disabled):
-                self._set_selected(value, False)
+                set_section_selected(self.staged, self.section, value, False)
             self._selected_values = selected
             self._status = "Staged changes pending" if self.staged.dirty() else "Ready"
         except CommandError as exc:
@@ -154,26 +174,6 @@ class CodexMgrTui(App[int]):
             self._refresh_view()
             return
         self._refresh_status()
-
-    def _set_selected(self, value: str, selected: bool) -> None:
-        """Apply one selected state to the active section.
-
-        Args:
-            value: Item value from the selection list.
-            selected: Whether the item is selected.
-        """
-        if self.section == "agentsmd":
-            self.staged.set_agentsmd_enabled(value, selected)
-        elif self.section == "skills":
-            self.staged.set_skill_selected(value, selected)
-        elif self.section == "hooks":
-            self.staged.set_hook_selected(value, selected)
-        elif self.section == "agents":
-            self.staged.set_agent_selected(value, selected)
-        elif self.section == "packages":
-            set_package_selection(self.staged, value, selected)
-        elif self.section == "mcp":
-            self.staged.set_mcp_selected(value, selected)
 
     def _refresh_view(self) -> None:
         """Refresh title, selectable list, detail text, and status.
@@ -191,7 +191,8 @@ class CodexMgrTui(App[int]):
             except NoMatches:
                 return
             title.update(self._title_text())
-            rendered_items, warning = self._items_for_section()
+            rendered_items, warning = items_for_section(self.staged, self.section)
+            self._rendered_items = rendered_items
             items.clear_options()
             items.add_options(selection_for_item(item) for item in rendered_items)
             if rendered_items:
@@ -202,6 +203,27 @@ class CodexMgrTui(App[int]):
             items.focus()
         finally:
             self._refreshing = False
+
+    def _highlighted_item(self, items: SelectionList[str]) -> ManagedItem | None:
+        """Return the display item for the highlighted row.
+
+        Args:
+            items: Selection list widget.
+
+        Returns:
+            Highlighted display item, or None when no row is highlighted.
+        """
+        option = items.highlighted_option
+        if option is None:
+            return None
+        return next(
+            (
+                item
+                for item in self._rendered_items
+                if item.selection_value() == option.value
+            ),
+            None,
+        )
 
     def _refresh_status(self) -> None:
         """Refresh low-cost dirty-state and status widgets only.
@@ -216,26 +238,6 @@ class CodexMgrTui(App[int]):
             return
         title.update(self._title_text())
         status.update(self._status_text())
-
-    def _items_for_section(self) -> tuple[list[ManagedItem], str]:
-        """Return display items for the active section.
-
-        Returns:
-            Display items and optional warning text.
-        """
-        if self.section == "agentsmd":
-            return agentsmd_items(self.staged), ""
-        if self.section == "skills":
-            return skill_items(self.staged), ""
-        if self.section == "hooks":
-            return hook_items(self.staged), ""
-        if self.section == "agents":
-            return agent_items(self.staged), ""
-        if self.section == "packages":
-            return package_items(self.staged), ""
-        if self.section == "mcp":
-            return mcp_items(self.staged, discover=True)
-        return [], ""
 
     def _title_text(self) -> Text:
         """Build the section title.

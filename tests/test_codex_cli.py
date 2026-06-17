@@ -353,6 +353,47 @@ skills = ["strict-skill"]
     assert not strict_skill.exists()
 
 
+def test_codex_jit_overlay_snapshots_and_restores_rules(
+    workspace,
+    monkeypatch,
+    run_cli_with_homes,
+):
+    """codex JIT package overlays copy rules temporarily and restore them."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_home_rule(codexmgr_home, "react/components.md", "# Components\n")
+    _write_package(codexmgr_home, "frontend", 'rules = ["react/"]\n')
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    captured = {}
+
+    def fake_run(command, cwd):
+        captured["command"] = command
+        captured["rule"] = (
+            project / ".rules" / "react" / "components.md"
+        ).read_text(encoding="utf-8")
+        return SimpleNamespace(returncode=9)
+
+    monkeypatch.setattr("codexmgr.commands.codex.subprocess.run", fake_run)
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = main(
+        ["codex", "--package", "frontend", "--", "exec", "hello"],
+        cwd=project,
+        codex_home=codex_home,
+        codexmgr_home=codexmgr_home,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert exit_code == 9
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue() == ""
+    assert captured["command"] == ["codex", "exec", "hello"]
+    assert captured["rule"] == "# Components\n"
+    assert not (project / ".rules").exists()
+
+
 def _write_package(codexmgr_home, name, content):
     """Create a package config for codex command tests.
 
@@ -419,5 +460,22 @@ def _write_home_template(codexmgr_home, name, content):
     template_dir = codexmgr_home / "agentsmd"
     template_dir.mkdir(parents=True)
     path = template_dir / f"{name}.toml"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def _write_home_rule(codexmgr_home, relative_path, content):
+    """Create a codexmgr-home rule file for codex command tests.
+
+    Args:
+        codexmgr_home: codexmgr home directory.
+        relative_path: POSIX path below the rules source root.
+        content: Rule file content.
+
+    Returns:
+        Path to the created rule file.
+    """
+    path = codexmgr_home / "rules" / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
     return path

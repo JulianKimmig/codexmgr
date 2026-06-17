@@ -12,6 +12,8 @@ from ..hooks.config import hook_lists
 from ..hooks.sources import require_hook_source
 from ..packages.config import PackageEntries
 from ..project.config import agents_md_sources
+from ..rules.config import rule_lists
+from ..rules.sources import canonical_rule_ref
 from ..skills.config import _skill_lists
 
 
@@ -33,28 +35,63 @@ def validate_package_enable(
         require_agent_source(agent, codexmgr_home)
     for hook in entries.hooks:
         require_hook_source(hook, codexmgr_home)
+    for rule in entries.rules:
+        canonical_rule_ref(rule, codexmgr_home)
 
 
-def package_checks(config: MutableMapping[str, Any], entries: PackageEntries) -> list[bool]:
-    """Return per-entry active checks for package entries.
+def package_checks(config: MutableMapping[str, Any], entries: PackageEntries) -> list[str]:
+    """Return per-entry states for package entries.
 
     Args:
         config: Staged codexmgr.toml document.
         entries: Package entries to inspect.
 
     Returns:
-        Boolean active states for all package entries.
+        State labels for all package entries.
     """
-    enabled_skills, _ = _skill_lists(config)
-    enabled_agents, _ = agent_lists(config)
-    enabled_hooks, _ = hook_lists(config)
+    enabled_skills, disabled_skills = _skill_lists(config)
+    enabled_agents, disabled_agents = agent_lists(config)
+    enabled_hooks, disabled_hooks = hook_lists(config)
+    enabled_rules, disabled_rules = rule_lists(config)
     sources = agents_md_sources(config)
     return [
-        *(reference in sources for reference in entries.agentsmd),
-        *(agent in enabled_agents for agent in entries.agents),
-        *(skill in enabled_skills for skill in entries.skills),
-        *(hook in enabled_hooks for hook in entries.hooks),
+        *(_agentsmd_state(reference, sources) for reference in entries.agentsmd),
+        *(_state(agent, enabled_agents, disabled_agents) for agent in entries.agents),
+        *(_state(skill, enabled_skills, disabled_skills) for skill in entries.skills),
+        *(_state(hook, enabled_hooks, disabled_hooks) for hook in entries.hooks),
+        *(_state(rule, enabled_rules, disabled_rules) for rule in entries.rules),
     ]
+
+
+def _agentsmd_state(reference: str, sources: list[str]) -> str:
+    """Return the staged state for one AGENTS.md package entry.
+
+    Args:
+        reference: Template reference.
+        sources: Configured AGENTS.md sources.
+
+    Returns:
+        ``enabled`` when present, otherwise ``available``.
+    """
+    return "enabled" if reference in sources else "available"
+
+
+def _state(name: str, enabled: list[str], disabled: list[str]) -> str:
+    """Return the staged state for one enable/disable package entry.
+
+    Args:
+        name: Entry reference.
+        enabled: Enabled refs.
+        disabled: Disabled refs.
+
+    Returns:
+        ``enabled``, ``disabled``, or ``available``.
+    """
+    if name in enabled:
+        return "enabled"
+    if name in disabled:
+        return "disabled"
+    return "available"
 
 
 def remove_skill(config: MutableMapping[str, Any], skill: str) -> None:
@@ -85,6 +122,21 @@ def remove_hook(config: MutableMapping[str, Any], hook: str) -> None:
     hooks = ensure_toml_table(config, "hooks", "codexmgr.toml [hooks] must be a table")
     hooks["enabled"] = [item for item in enabled if item != hook]
     hooks["disabled"] = [item for item in disabled if item != hook]
+
+
+def remove_rule(config: MutableMapping[str, Any], rule: str) -> None:
+    """Remove a rule from both staged rule state lists.
+
+    Args:
+        config: Staged codexmgr.toml document.
+        rule: Rule reference to remove.
+    """
+    if "rules" not in config:
+        return
+    enabled, disabled = rule_lists(config)
+    rules = ensure_toml_table(config, "rules", "codexmgr.toml [rules] must be a table")
+    rules["enabled"] = [item for item in enabled if item != rule]
+    rules["disabled"] = [item for item in disabled if item != rule]
 
 
 def remove_agent(config: MutableMapping[str, Any], agent: str) -> None:

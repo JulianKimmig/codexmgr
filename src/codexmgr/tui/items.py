@@ -18,6 +18,7 @@ from ..skills.config import _skill_lists
 from ..skills.sources import available_skill_names, resolve_skill_file
 from .models import DashboardSummary, ManagedItem
 from .package_refs import package_profile_value, package_value
+from .rule_items import rule_items
 from .state import StagedConfig
 
 

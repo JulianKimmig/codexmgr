@@ -26,6 +26,12 @@ from ..custom_agents.resolution import (
     resolve_project_agents,
 )
 from ..mcp.config import resolve_overrides
+from ..rules.copies import apply_rule_copy, remove_rule_copy_target
+from ..rules.resolution import (
+    RuleResolution,
+    empty_rule_resolution,
+    resolve_project_rules,
+)
 from ..skills.copies import (
     apply_skill_copy,
     expected_copy_files,
@@ -81,6 +87,8 @@ def apply_project_state(state: ProjectBuild) -> None:
         remove_hook_copy_target(target)
     for target in state.obsolete_agent_copy_targets:
         remove_agent_copy_target(target)
+    for target in state.obsolete_rule_copy_targets:
+        remove_rule_copy_target(target)
     for target in state.obsolete_file_targets:
         remove_file_target(target)
     for skill_copy in state.skill_copies:
@@ -89,6 +97,8 @@ def apply_project_state(state: ProjectBuild) -> None:
         apply_hook_copy(hook_copy)
     for agent_copy in state.agent_copies:
         apply_agent_copy(agent_copy)
+    for rule_copy in state.rule_copies:
+        apply_rule_copy(rule_copy)
     for generated_file in state.files:
         generated_file.path.parent.mkdir(parents=True, exist_ok=True)
         generated_file.path.write_text(generated_file.content, encoding="utf-8")
@@ -135,6 +145,7 @@ def build_project_state_from_config(
     agent_resolution = _resolve_agents(config, cwd, codexmgr_home, previous_lock)
     skill_resolution = _resolve_skills(config, cwd, codex_home, codexmgr_home, previous_lock)
     hook_resolution = _resolve_hooks(config, cwd, codexmgr_home, previous_lock)
+    rule_resolution = _resolve_rules(config, cwd, codexmgr_home, previous_lock)
     mcp_overrides = resolve_overrides(config, strict=True)
     codex_config = build_codex_config(
         cwd,
@@ -149,6 +160,7 @@ def build_project_state_from_config(
         agent_resolution,
         skill_resolution,
         hook_resolution,
+        rule_resolution,
         mcp_overrides,
     )
     files = build_generated_files(
@@ -165,6 +177,7 @@ def build_project_state_from_config(
             *expected_copy_files(skill_resolution.copies),
             *hook_resolution.copy_files,
             *agent_resolution.copy_files,
+            *rule_resolution.copy_files,
         ],
         skill_resolution.copies,
         skill_resolution.obsolete_copy_targets,
@@ -172,6 +185,8 @@ def build_project_state_from_config(
         hook_resolution.obsolete_copy_targets,
         agent_resolution.copies,
         agent_resolution.obsolete_copy_targets,
+        rule_resolution.copies,
+        rule_resolution.obsolete_copy_targets,
         obsolete_generated_files(cwd, hook_resolution),
     )
 
@@ -260,3 +275,25 @@ def _resolve_hooks(
     if "hooks" not in config:
         return empty_hook_resolution()
     return resolve_project_hooks(config, cwd, codexmgr_home, previous_lock)
+
+
+def _resolve_rules(
+    config: dict[str, Any],
+    cwd: Path,
+    codexmgr_home: Path,
+    previous_lock: dict[str, Any],
+) -> RuleResolution:
+    """Resolve rules only when the project config owns the rules table.
+
+    Args:
+        config: Parsed project codexmgr configuration.
+        cwd: Project directory.
+        codexmgr_home: codexmgr home directory.
+        previous_lock: Existing codexmgr lock data.
+
+    Returns:
+        Resolved reusable-rule state.
+    """
+    if "rules" not in config:
+        return empty_rule_resolution()
+    return resolve_project_rules(config, cwd, codexmgr_home, previous_lock)

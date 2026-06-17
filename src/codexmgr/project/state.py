@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from ..custom_agents.copies import AgentCopy
+from ..rules.copies import RuleCopy
 from ..skills.copies import SkillCopy
 
 
@@ -34,6 +35,8 @@ class ProjectBuild:
         obsolete_hook_copy_targets: Previous managed hook directories to remove.
         agent_copies: Managed custom-agent files to copy on apply.
         obsolete_agent_copy_targets: Previous managed agent files to remove.
+        rule_copies: Managed reusable rule files to copy on apply.
+        obsolete_rule_copy_targets: Previous managed rule files to remove.
         obsolete_file_targets: Previously generated files to remove.
     """
 
@@ -45,4 +48,6 @@ class ProjectBuild:
     obsolete_hook_copy_targets: list[Path]
     agent_copies: list[AgentCopy]
     obsolete_agent_copy_targets: list[Path]
+    rule_copies: list[RuleCopy]
+    obsolete_rule_copy_targets: list[Path]
     obsolete_file_targets: list[Path]

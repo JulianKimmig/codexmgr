@@ -24,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_agents_parser(subparsers, _add_no_sync_argument)
     _add_skill_parser(subparsers)
     _add_hooks_parser(subparsers)
+    _add_rules_parser(subparsers)
     _add_package_parser(subparsers)
     add_mcp_parser(subparsers, _add_no_sync_argument)
     _add_tui_parser(subparsers)
@@ -161,6 +162,29 @@ def _add_hooks_parser(subparsers: argparse._SubParsersAction) -> None:
     disable.add_argument("hooks", nargs="+", help="Hook bundle names")
 
     hooks_subparsers.add_parser("list", help="List available and configured hooks")
+
+
+def _add_rules_parser(subparsers: argparse._SubParsersAction) -> None:
+    """Add reusable rule management parsers.
+
+    Args:
+        subparsers: Top-level subparser action.
+
+    Returns:
+        None. The parser is mutated in place.
+    """
+    rules = subparsers.add_parser("rules", help="Manage reusable rule files")
+    rules_subparsers = rules.add_subparsers(dest="rules_command", required=True)
+
+    enable = rules_subparsers.add_parser("enable", help="Enable rule files or folders")
+    _add_no_sync_argument(enable)
+    enable.add_argument("rules", nargs="+", help="Rule file or folder refs")
+
+    disable = rules_subparsers.add_parser("disable", help="Disable rule files or folders")
+    _add_no_sync_argument(disable)
+    disable.add_argument("rules", nargs="+", help="Rule file or folder refs")
+
+    rules_subparsers.add_parser("list", help="List available and configured rules")
 
 
 def _add_package_parser(subparsers: argparse._SubParsersAction) -> None:

@@ -70,27 +70,16 @@ async def test_tui_app_toggles_agent_and_saves_without_sync(
 
 
 @pytest.mark.asyncio
-async def test_tui_app_does_not_rebuild_skill_list_on_toggle(
+async def test_tui_app_cycles_skill_to_disabled_and_available(
     workspace,
     run_cli_with_homes,
-    monkeypatch,
+    read_project_config,
 ):
-    """Toggling a skill updates staged state without rescanning the list."""
+    """The space action cycles skills through enabled, disabled, and available."""
     project, codex_home = workspace
     codexmgr_home = codex_home.parent / "codexmgr-home"
     _write_skill(codexmgr_home, "review")
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
-    calls = {"count": 0}
-
-    from codexmgr.tui import app as tui_app
-
-    original_skill_items = tui_app.skill_items
-
-    def counted_skill_items(staged):
-        calls["count"] += 1
-        return original_skill_items(staged)
-
-    monkeypatch.setattr(tui_app, "skill_items", counted_skill_items)
     app = CodexMgrTui(
         cwd=project,
         codex_home=codex_home,
@@ -101,11 +90,34 @@ async def test_tui_app_does_not_rebuild_skill_list_on_toggle(
 
     async with app.run_test() as pilot:
         await pilot.press("3")
-        await pilot.pause()
-        assert calls["count"] == 1
         await pilot.press("space")
+        await pilot.press("space")
+        await pilot.press("s")
         await pilot.pause()
-        assert calls["count"] == 1
+
+    assert read_project_config(project)["skills"] == {
+        "enabled": [],
+        "disabled": ["review"],
+    }
+
+    app = CodexMgrTui(
+        cwd=project,
+        codex_home=codex_home,
+        codexmgr_home=codexmgr_home,
+        no_sync=True,
+        show_diff=False,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("3")
+        await pilot.press("space")
+        await pilot.press("s")
+        await pilot.pause()
+
+    assert read_project_config(project)["skills"] == {
+        "enabled": [],
+        "disabled": [],
+    }
 
 
 @pytest.mark.asyncio
@@ -139,7 +151,7 @@ skills = ["strict-review"]
     )
 
     async with app.run_test() as pilot:
-        await pilot.press("6")
+        await pilot.press("7")
         await pilot.press("down")
         await pilot.press("space")
         await pilot.press("s")

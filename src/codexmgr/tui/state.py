@@ -18,17 +18,19 @@ from ..mcp.config import resolve_overrides, set_enabled_in_config
 from ..project.apply import apply_project_config
 from ..project.config import agents_md_sources, require_codex_dir, set_agents_md_sources
 from ..skills.config import _skill_lists, set_skill_state_in_config
-from . import package_state as packages
 from .mutations import (
     remove_agent,
     remove_hook,
     remove_mcp_server,
+    remove_rule,
     remove_skill,
 )
+from .staged_packages import PackageStageMixin
+from ..rules.config import rule_lists, set_rule_state_in_config
 
 
 @dataclass
-class StagedConfig:
+class StagedConfig(PackageStageMixin):
     """Mutable in-memory project configuration.
 
     Attributes:
@@ -40,6 +42,7 @@ class StagedConfig:
         original_skills: Skill refs configured when the stage was loaded.
         original_agents: Custom-agent names configured when the stage was loaded.
         original_hooks: Hook names configured when the stage was loaded.
+        original_rules: Rule refs configured when the stage was loaded.
         original_mcp_servers: MCP server ids configured when the stage was loaded.
     """
 
@@ -51,6 +54,7 @@ class StagedConfig:
     original_skills: frozenset[str]
     original_agents: frozenset[str]
     original_hooks: frozenset[str]
+    original_rules: frozenset[str]
     original_mcp_servers: frozenset[str]
 
     def dirty(self) -> bool:
@@ -125,6 +129,34 @@ class StagedConfig:
         else:
             remove_hook(self.config, hook)
 
+    def set_rule_enabled(self, rule: str, enabled: bool) -> None:
+        """Set a reusable rule reference to enabled or disabled.
+
+        Args:
+            rule: Rule file or folder reference.
+            enabled: Desired enabled state.
+        """
+        set_rule_state_in_config(
+            self.config,
+            rule,
+            self.codexmgr_home,
+            enabled=enabled,
+        )
+
+    def set_rule_selected(self, rule: str, selected: bool) -> None:
+        """Apply checkbox semantics for a reusable rule selection.
+
+        Args:
+            rule: Rule file or folder reference.
+            selected: Whether the rule is currently checked.
+        """
+        if selected:
+            self.set_rule_enabled(rule, True)
+        elif rule in self.original_rules:
+            self.set_rule_enabled(rule, False)
+        else:
+            remove_rule(self.config, rule)
+
     def set_agent_enabled(self, agent: str, enabled: bool) -> None:
         """Set a custom agent to enabled or disabled.
 
@@ -149,71 +181,6 @@ class StagedConfig:
             self.set_agent_enabled(agent, False)
         else:
             remove_agent(self.config, agent)
-
-    def set_package_enabled(self, name: str, enabled: bool) -> None:
-        """Enable or disable all entries from a packaged configuration.
-
-        Args:
-            name: Package name under CODEXMGR_HOME/packages.
-            enabled: Whether package entries should be active.
-        """
-        packages.set_package_enabled(
-            self.config,
-            name,
-            enabled,
-            self.cwd,
-            self.codexmgr_home,
-        )
-
-    def set_package_profile_enabled(
-        self,
-        name: str,
-        profile: str,
-        enabled: bool,
-    ) -> None:
-        """Enable or disable one package profile entry set.
-
-        Args:
-            name: Package name under CODEXMGR_HOME/packages.
-            profile: Profile name within the package config.
-            enabled: Whether profile entries should be active.
-        """
-        packages.set_package_profile_enabled(
-            self.config,
-            name,
-            profile,
-            enabled,
-            self.cwd,
-            self.codexmgr_home,
-        )
-
-    def package_state(self, name: str) -> str:
-        """Return enabled, partial, or disabled for a package.
-
-        Args:
-            name: Package name under CODEXMGR_HOME/packages.
-
-        Returns:
-            Package state computed from staged entries.
-        """
-        return packages.package_state(self.config, name, self.codexmgr_home)
-
-    def package_profile_state(self, name: str, profile: str) -> str:
-        """Return enabled, partial, or disabled for a package profile.
-
-        Args:
-            name: Package name under CODEXMGR_HOME/packages.
-            profile: Profile name within the package config.
-
-        Returns:
-            Package profile state computed from staged entries.
-        """
-        return packages.package_profile_state(
-            self.config,
-            name,
-            profile,
-            self.codexmgr_home,
-        )
 
     def set_mcp_enabled(self, server_id: str, enabled: bool) -> None:
         """Set an MCP server enabled override.
@@ -254,6 +221,7 @@ def load_staged_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> Stag
     enabled_skills, disabled_skills = _skill_lists(config)
     enabled_agents, disabled_agents = agent_lists(config)
     enabled_hooks, disabled_hooks = hook_lists(config)
+    enabled_rules, disabled_rules = rule_lists(config)
     mcp_servers = resolve_overrides(config, strict=False)
     return StagedConfig(
         cwd,
@@ -264,6 +232,7 @@ def load_staged_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> Stag
         frozenset([*enabled_skills, *disabled_skills]),
         frozenset([*enabled_agents, *disabled_agents]),
         frozenset([*enabled_hooks, *disabled_hooks]),
+        frozenset([*enabled_rules, *disabled_rules]),
         frozenset(mcp_servers),
     )
 

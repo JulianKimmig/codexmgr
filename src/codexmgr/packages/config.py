@@ -9,7 +9,7 @@ from ..core.errors import CommandError
 from ..core.toml_io import load_toml_file, plain_toml_value
 from .sources import require_package_config
 
-SUPPORTED_KEYS = ("agentsmd", "agents", "hooks", "skills")
+SUPPORTED_KEYS = ("agentsmd", "agents", "hooks", "skills", "rules")
 TOP_LEVEL_KEYS = (*SUPPORTED_KEYS, "profiles")
 
 
@@ -22,12 +22,14 @@ class PackageEntries:
         agents: Custom-agent names to enable or disable.
         hooks: Hook bundle names to enable or disable.
         skills: Skill references to enable or disable.
+        rules: Reusable rule refs to enable or disable.
     """
 
     agentsmd: list[str]
     agents: list[str]
     hooks: list[str]
     skills: list[str]
+    rules: list[str]
 
 
 @dataclass(frozen=True)
@@ -40,6 +42,7 @@ class PackageConfig:
         agents: Custom-agent names to enable or disable.
         hooks: Hook bundle names to enable or disable.
         skills: Skill references to enable or disable.
+        rules: Reusable rule refs to enable or disable.
         profiles: Optional named profile entries keyed by profile name.
     """
 
@@ -48,6 +51,7 @@ class PackageConfig:
     agents: list[str]
     hooks: list[str]
     skills: list[str]
+    rules: list[str]
     profiles: dict[str, PackageEntries]
 
 
@@ -85,7 +89,8 @@ def parse_package_config(
         raise CommandError(f"Unsupported package config key: {unsupported[0]}")
     if not any(key in data for key in TOP_LEVEL_KEYS):
         raise CommandError(
-            f"Package config must include agentsmd, agents, hooks, skills, or profiles: {path}"
+            "Package config must include agentsmd, agents, hooks, skills, "
+            f"rules, or profiles: {path}"
         )
     return PackageConfig(
         name=name,
@@ -93,6 +98,7 @@ def parse_package_config(
         agents=_string_list(data, "agents", path),
         hooks=_string_list(data, "hooks", path),
         skills=_string_list(data, "skills", path),
+        rules=_string_list(data, "rules", path),
         profiles=_profiles(data, path),
     )
 
@@ -114,6 +120,7 @@ def selected_package_entries(
     agents = list(package.agents)
     hooks = list(package.hooks)
     skills = list(package.skills)
+    rules = list(package.rules)
     for profile_name in profile_names:
         profile = package.profiles.get(profile_name)
         if profile is None:
@@ -124,7 +131,14 @@ def selected_package_entries(
         agents = _append_unique(agents, profile.agents)
         hooks = _append_unique(hooks, profile.hooks)
         skills = _append_unique(skills, profile.skills)
-    return PackageEntries(agentsmd=agentsmd, agents=agents, hooks=hooks, skills=skills)
+        rules = _append_unique(rules, profile.rules)
+    return PackageEntries(
+        agentsmd=agentsmd,
+        agents=agents,
+        hooks=hooks,
+        skills=skills,
+        rules=rules,
+    )
 
 
 def _profiles(data: Mapping[str, Any], path: Path) -> dict[str, PackageEntries]:
@@ -154,6 +168,7 @@ def _profiles(data: Mapping[str, Any], path: Path) -> dict[str, PackageEntries]:
             agents=_string_list(table, "agents", path),
             hooks=_string_list(table, "hooks", path),
             skills=_string_list(table, "skills", path),
+            rules=_string_list(table, "rules", path),
         )
     return parsed
 

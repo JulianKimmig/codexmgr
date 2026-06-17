@@ -1,5 +1,6 @@
 """Rendering constants and helpers for the Textual TUI."""
 
+from textual.binding import Binding
 from rich.text import Text
 from textual.widgets.selection_list import Selection
 
@@ -48,6 +49,7 @@ SECTION_TITLES = {
     "skills": "Skills",
     "hooks": "Hooks",
     "agents": "Agents",
+    "rules": "Rules",
     "packages": "Packages",
     "mcp": "MCP Servers",
 }
@@ -58,23 +60,26 @@ NAV_LABELS = [
     "3 Skills",
     "4 Hooks",
     "5 Agents",
-    "6 Packages",
-    "7 MCP",
+    "6 Rules",
+    "7 Packages",
+    "8 MCP",
     "",
-    "space Toggle",
+    "space Cycle",
     "s Save",
     "r Refresh",
     "q Quit",
 ]
 
 TUI_BINDINGS = [
+    Binding("space", "cycle_state", "Cycle", priority=True),
     ("1", "section('dashboard')", "Dashboard"),
     ("2", "section('agentsmd')", "AGENTS.md"),
     ("3", "section('skills')", "Skills"),
     ("4", "section('hooks')", "Hooks"),
     ("5", "section('agents')", "Agents"),
-    ("6", "section('packages')", "Packages"),
-    ("7", "section('mcp')", "MCP"),
+    ("6", "section('rules')", "Rules"),
+    ("7", "section('packages')", "Packages"),
+    ("8", "section('mcp')", "MCP"),
     ("r", "refresh", "Refresh"),
     ("s", "save", "Save"),
     ("q", "quit", "Quit"),

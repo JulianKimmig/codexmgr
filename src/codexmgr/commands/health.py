@@ -11,6 +11,7 @@ from ..custom_agents.listing import configured_agent_lists, missing_enabled_agen
 from ..project.config import agents_md_sources, load_required_project_config
 from ..project.sync import generated_file_diffs
 from ..hooks.listing import configured_hook_lists, missing_enabled_hooks
+from ..rules.listing import configured_rule_lists, missing_enabled_rules
 from ..skills.listing import configured_skill_lists, missing_enabled_skills
 
 
@@ -35,6 +36,7 @@ def run_status(
     enabled, disabled = configured_skill_lists(cwd)
     enabled_hooks, disabled_hooks = configured_hook_lists(cwd)
     enabled_agents, disabled_agents = configured_agent_lists(cwd)
+    enabled_rules, disabled_rules = configured_rule_lists(cwd)
     diffs = generated_file_diffs(cwd, codex_home, codexmgr_home)
     lines = [
         f"Project: {cwd}",
@@ -47,6 +49,8 @@ def run_status(
         f"Disabled hooks: {_format_values(disabled_hooks)}",
         f"Enabled agents: {_format_values(enabled_agents)}",
         f"Disabled agents: {_format_values(disabled_agents)}",
+        f"Enabled rules: {_format_values(enabled_rules)}",
+        f"Disabled rules: {_format_values(disabled_rules)}",
         f"Generated files: {_sync_state(diffs)}",
     ]
     lines.extend(f"  {diff.relative_path}" for diff in diffs)
@@ -86,6 +90,7 @@ def run_doctor(
     _check_missing_enabled_skills(cwd, codex_home, codexmgr_home, report)
     _check_missing_enabled_hooks(cwd, codexmgr_home, report)
     _check_missing_enabled_agents(cwd, codexmgr_home, report)
+    _check_missing_enabled_rules(cwd, codexmgr_home, report)
     _check_generated_files(cwd, codex_home, codexmgr_home, report)
 
     has_errors = any(line.startswith("ERROR ") for line in report)
@@ -210,6 +215,25 @@ def _check_missing_enabled_agents(
     """
     for agent in missing_enabled_agents(cwd, codexmgr_home):
         report.append(f"ERROR Missing enabled agent: {agent}")
+
+
+def _check_missing_enabled_rules(
+    cwd: Path,
+    codexmgr_home: Path,
+    report: list[str],
+) -> None:
+    """Check that enabled reusable rule references resolve.
+
+    Args:
+        cwd: Project directory whose configured rules should be checked.
+        codexmgr_home: codexmgr home used to resolve reusable rules.
+        report: Mutable diagnostic report receiving any error.
+
+    Returns:
+        None.
+    """
+    for rule in missing_enabled_rules(cwd, codexmgr_home):
+        report.append(f"ERROR Missing enabled rule: {rule}")
 
 
 def _check_generated_files(

@@ -5,7 +5,7 @@ import json
 from codexmgr.interface.parser import build_parser
 from codexmgr.project.sync import generated_file_diffs
 from codexmgr.tui.diff import staged_diff_lines
-from codexmgr.tui.items import agent_items, package_items
+from codexmgr.tui.items import agent_items, package_items, rule_items
 from codexmgr.tui.state import load_staged_config, save_staged_config
 
 
@@ -100,6 +100,31 @@ def test_staged_agent_toggle_writes_only_on_save(
     assert not (project / ".codex" / "agents" / "reviewer.toml").exists()
 
 
+def test_staged_rule_toggle_writes_only_on_save(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """Rule toggles stay in memory until the staged config is saved."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_rule(codexmgr_home, "react/components.md")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+
+    staged = load_staged_config(project, codex_home, codexmgr_home)
+    staged.set_rule_enabled("react/", True)
+
+    assert "rules" not in read_project_config(project)
+
+    save_staged_config(staged, no_sync=True)
+
+    assert read_project_config(project)["rules"] == {
+        "enabled": ["react/"],
+        "disabled": [],
+    }
+    assert not (project / ".rules").exists()
+
+
 def test_agent_items_include_available_enabled_disabled_and_missing(
     workspace,
     run_cli_with_homes,
@@ -131,6 +156,44 @@ def test_agent_items_include_available_enabled_disabled_and_missing(
     ]
 
 
+def test_rule_items_include_available_enabled_disabled_and_missing(
+    workspace,
+    run_cli_with_homes,
+):
+    """The TUI rule list exposes available and configured rule refs."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_rule(codexmgr_home, "react/components.md")
+    _write_rule(codexmgr_home, "react/materials/colors.md")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(["rules", "enable", "--no-sync", "react/"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(
+        ["rules", "disable", "--no-sync", "react/materials/"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+    config_path = project / ".codex" / "codexmgr.toml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            'enabled = ["react/"]',
+            'enabled = ["react/", "missing.md"]',
+        ),
+        encoding="utf-8",
+    )
+    staged = load_staged_config(project, codex_home, codexmgr_home)
+
+    items = rule_items(staged)
+
+    assert [(item.name, item.state, item.missing) for item in items] == [
+        ("missing.md", "enabled", True),
+        ("react/", "enabled", False),
+        ("react/components.md", "available", False),
+        ("react/materials/", "disabled", False),
+        ("react/materials/colors.md", "available", False),
+    ]
+
+
 def test_staged_package_toggle_enables_and_disables_referenced_entries(
     workspace,
     write_home_template,
@@ -152,8 +215,10 @@ agentsmd = ["coding"]
 agents = ["rule-retriever"]
 hooks = ["repo-rules"]
 skills = ["repo-rule-manager"]
+rules = ["react/"]
 ''',
     )
+    _write_rule(codexmgr_home, "react/components.md")
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
 
     staged = load_staged_config(project, codex_home, codexmgr_home)
@@ -166,6 +231,7 @@ skills = ["repo-rule-manager"]
         "agents": {"enabled": ["rule-retriever"], "disabled": []},
         "skills": {"enabled": ["repo-rule-manager"], "disabled": []},
         "hooks": {"enabled": ["repo-rules"], "disabled": []},
+        "rules": {"enabled": ["react/"], "disabled": []},
     }
 
     staged = load_staged_config(project, codex_home, codexmgr_home)
@@ -178,6 +244,7 @@ skills = ["repo-rule-manager"]
         "agents": {"enabled": [], "disabled": ["rule-retriever"]},
         "skills": {"enabled": [], "disabled": ["repo-rule-manager"]},
         "hooks": {"enabled": [], "disabled": ["repo-rules"]},
+        "rules": {"enabled": [], "disabled": ["react/"]},
     }
 
 
@@ -398,6 +465,14 @@ def _write_hook_bundle(home, name):
         encoding="utf-8",
     )
     return hook_file
+
+
+def _write_rule(home, relative_path):
+    """Create a codexmgr-home rule for tests."""
+    path = home / "rules" / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# Rule\n", encoding="utf-8")
+    return path
 
 
 def _write_package(home, name, content):

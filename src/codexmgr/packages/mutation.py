@@ -11,6 +11,8 @@ from ..custom_agents.sources import require_agent_source
 from ..hooks.config import set_hook_state_in_config
 from ..hooks.sources import require_hook_source
 from ..project.config import agents_md_sources, require_codex_dir, set_agents_md_sources
+from ..rules.config import set_rule_state_in_config
+from ..rules.sources import canonical_rule_ref
 from ..skills.config import set_skill_state_in_config
 from .config import PackageEntries, load_package_config, selected_package_entries
 
@@ -86,6 +88,7 @@ def disable_package(name: str, cwd: Path, codexmgr_home: Path) -> str:
 def apply_package_entries_to_config(
     config: MutableMapping[str, Any],
     entries: PackageEntries,
+    codexmgr_home: Path,
     *,
     enabled: bool,
 ) -> None:
@@ -94,6 +97,7 @@ def apply_package_entries_to_config(
     Args:
         config: Parsed project config to mutate.
         entries: Package entries selected from root and profiles.
+        codexmgr_home: codexmgr home directory used to canonicalize rules.
         enabled: Whether entries should be enabled or disabled.
     """
     if enabled:
@@ -102,6 +106,8 @@ def apply_package_entries_to_config(
         _remove_agentsmd(config, entries.agentsmd)
     for skill in entries.skills:
         set_skill_state_in_config(config, skill, enabled=enabled)
+    for rule in entries.rules:
+        set_rule_state_in_config(config, rule, codexmgr_home, enabled=enabled)
     for agent in entries.agents:
         set_agent_state_in_config(config, agent, enabled=enabled)
     for hook in entries.hooks:
@@ -156,7 +162,7 @@ def _mutate_packages(
     require_codex_dir(cwd)
     config = load_optional_toml_file(config_path(cwd))
     for entries in selections:
-        apply_package_entries_to_config(config, entries, enabled=enabled)
+        apply_package_entries_to_config(config, entries, codexmgr_home, enabled=enabled)
     write_toml_file(config_path(cwd), config)
     return list(names)
 
@@ -179,6 +185,8 @@ def _validate_enable_sources(
         require_agent_source(agent, codexmgr_home)
     for hook in entries.hooks:
         require_hook_source(hook, codexmgr_home)
+    for rule in entries.rules:
+        canonical_rule_ref(rule, codexmgr_home)
 
 
 def _add_agentsmd(config: MutableMapping[str, Any], references: list[str]) -> None:
