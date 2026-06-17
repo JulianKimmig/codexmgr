@@ -107,6 +107,27 @@ def _set_skill_state(skill: str, cwd: Path, *, enabled: bool) -> str:
     """
     _require_codex_dir(cwd)
     config = load_optional_toml_file(config_path(cwd))
+    set_skill_state_in_config(config, skill, enabled=enabled)
+    write_toml_file(config_path(cwd), config)
+    return skill
+
+
+def set_skill_state_in_config(
+    config: MutableMapping[str, Any],
+    skill: str,
+    *,
+    enabled: bool,
+) -> str:
+    """Set one skill reference in a parsed project config.
+
+    Args:
+        config: Parsed codexmgr.toml data to mutate.
+        skill: Skill name or path to place in the requested state list.
+        enabled: Desired state for the skill reference.
+
+    Returns:
+        The skill reference that was updated.
+    """
     enabled_skills, disabled_skills = _skill_lists(config)
 
     if enabled:
@@ -117,7 +138,6 @@ def _set_skill_state(skill: str, cwd: Path, *, enabled: bool) -> str:
         enabled_skills = _without(enabled_skills, skill)
 
     _set_skill_lists(config, enabled_skills, disabled_skills)
-    write_toml_file(config_path(cwd), config)
     return skill
 
 

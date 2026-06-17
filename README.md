@@ -11,6 +11,7 @@ The tool is intentionally narrow:
 - compose reusable AGENTS.md instruction fragments
 - enable or disable Codex skills per project
 - enable or disable reusable Codex hook bundles per project
+- enable or disable packaged sets of AGENTS.md, skill, and hook settings
 - enable, disable, inspect, and update safe project-local MCP overrides
 - write reproducible lock data for the resolved project configuration
 - run `codex` with project `.codex/config.toml` values translated into `-c`
@@ -136,6 +137,22 @@ bundles are merged into `.codex/hooks.json` on every apply with
 preserved. Bundle files other than the root `hooks.json` are copied into
 `.codex/hooks/<name>`.
 
+Packaged configurations resolve from
+`$CODEXMGR_HOME/packages/<name>/config.toml`. A package config is a flat TOML
+file that can contain `agentsmd`, `hooks`, and `skills` string lists:
+
+```toml
+agentsmd = []
+hooks = ["repo-rules"]
+skills = ["repo-rule-manager"]
+```
+
+`codexmgr package enable <name>` validates package AGENTS.md and hook
+references, then updates `.codex/codexmgr.toml` as if the corresponding
+`agentsmd add`, `hooks enable`, and `skill enable` commands had been run.
+`codexmgr package disable <name>` removes package AGENTS.md entries when
+present and disables the package skills and hooks.
+
 Mutating commands run `apply` automatically unless `--no-sync` is passed.
 Project guidelines require `apply` whenever `.codex/codexmgr.toml` changes,
 unless `--no-sync` was explicitly requested.
@@ -189,6 +206,9 @@ codexmgr skill disable [--no-sync] <name-or-skill-path>
 codexmgr hooks list
 codexmgr hooks enable [--no-sync] <hook-name>
 codexmgr hooks disable [--no-sync] <hook-name>
+codexmgr package list
+codexmgr package enable [--no-sync] <package-name>
+codexmgr package disable [--no-sync] <package-name>
 codexmgr mcp list
 codexmgr mcp show <server-id>
 codexmgr mcp validate
@@ -317,6 +337,14 @@ marks configured hook bundles as enabled, disabled, or missing.
 `hooks enable` validates that the named hook bundle exists before writing
 config. `hooks enable` and `hooks disable` keep enabled and disabled lists
 mutually exclusive. Repeated commands keep one entry.
+
+`package list` prints available `$CODEXMGR_HOME/packages/*/config.toml`
+entries in sorted order.
+
+`package enable` and `package disable` proxy to existing AGENTS.md, skill, and
+hook project-config mutations. Package state is not tracked separately; the
+resulting `[agents_md]`, `[skills]`, and `[hooks]` tables remain the source of
+truth.
 
 `codex` forwards arguments to the real `codex` command. Values from
 `.codex/config.toml` are flattened into `-c key=value` overrides. User-provided

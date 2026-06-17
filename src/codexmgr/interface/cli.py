@@ -19,6 +19,7 @@ from ..commands.navigation import run_codexmgr_home_action
 from ..core.errors import CommandError
 from ..core.paths import global_codex_dir, global_codexmgr_dir
 from ..mcp.cli import run_mcp_command
+from ..packages.cli import run_package_command
 from ..project.apply import apply_project_config, setup_project
 from ..project.sync import check_project_sync
 from ..hooks.config import disable_hook, enable_hook
@@ -228,6 +229,9 @@ def _dispatch(
             codexmgr_home,
             stdout,
         )
+
+    if args.command == "package":
+        return run_package_command(args, cwd, codex_home, codexmgr_home, stdout)
 
     if args.command == "mcp":
         return run_mcp_command(args, cwd, codex_home, codexmgr_home, stdout)

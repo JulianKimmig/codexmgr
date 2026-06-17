@@ -72,6 +72,27 @@ def _set_hook_state(name: str, cwd: Path, *, enabled: bool) -> str:
     """
     require_codex_dir(cwd)
     config = load_optional_toml_file(config_path(cwd))
+    set_hook_state_in_config(config, name, enabled=enabled)
+    write_toml_file(config_path(cwd), config)
+    return name
+
+
+def set_hook_state_in_config(
+    config: MutableMapping[str, Any],
+    name: str,
+    *,
+    enabled: bool,
+) -> str:
+    """Set one hook bundle state in a parsed project config.
+
+    Args:
+        config: Parsed codexmgr.toml data to mutate.
+        name: Bare hook bundle name to place in the requested state list.
+        enabled: Desired state for the hook bundle.
+
+    Returns:
+        The hook bundle name that was updated.
+    """
     enabled_hooks, disabled_hooks = hook_lists(config)
 
     if enabled:
@@ -82,7 +103,6 @@ def _set_hook_state(name: str, cwd: Path, *, enabled: bool) -> str:
         enabled_hooks = _without(enabled_hooks, name)
 
     _set_hook_lists(config, enabled_hooks, disabled_hooks)
-    write_toml_file(config_path(cwd), config)
     return name
 
 

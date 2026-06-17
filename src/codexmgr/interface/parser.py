@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_agentsmd_parser(subparsers)
     _add_skill_parser(subparsers)
     _add_hooks_parser(subparsers)
+    _add_package_parser(subparsers)
     _add_mcp_parser(subparsers)
     _add_init_template_parser(subparsers)
     subparsers.add_parser("doctor", help="Check project configuration health")
@@ -152,6 +153,32 @@ def _add_hooks_parser(subparsers: argparse._SubParsersAction) -> None:
     disable.add_argument("hook", help="Hook bundle name")
 
     hooks_subparsers.add_parser("list", help="List available and configured hooks")
+
+
+def _add_package_parser(subparsers: argparse._SubParsersAction) -> None:
+    """Add packaged configuration management parsers.
+
+    Args:
+        subparsers: Top-level subparser action.
+
+    Returns:
+        None. The parser is mutated in place.
+    """
+    package = subparsers.add_parser("package", help="Manage packaged configurations")
+    package_subparsers = package.add_subparsers(
+        dest="package_command",
+        required=True,
+    )
+
+    package_subparsers.add_parser("list", help="List available packages")
+
+    enable = package_subparsers.add_parser("enable", help="Enable a package")
+    _add_no_sync_argument(enable)
+    enable.add_argument("package", help="Package name")
+
+    disable = package_subparsers.add_parser("disable", help="Disable a package")
+    _add_no_sync_argument(disable)
+    disable.add_argument("package", help="Package name")
 
 
 def _add_mcp_parser(subparsers: argparse._SubParsersAction) -> None:
