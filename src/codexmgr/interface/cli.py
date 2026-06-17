@@ -6,14 +6,17 @@ from pathlib import Path
 from typing import TextIO
 
 from ..agents.manager import (
-    add_agentsmd,
     init_agentsmd_template,
     list_agentsmd_options,
-    remove_agentsmd,
     show_agentsmd,
     validate_agentsmd,
 )
-from ..commands.codex import run_codex
+from ..commands.codex import run_codex_command
+from ..commands.config_mutations import (
+    run_agentsmd_mutation,
+    run_hooks_command,
+    run_skill_command,
+)
 from ..commands.health import run_doctor, run_status
 from ..commands.navigation import run_codexmgr_home_action
 from ..core.errors import CommandError
@@ -22,10 +25,6 @@ from ..mcp.cli import run_mcp_command
 from ..packages.cli import run_package_command
 from ..project.apply import apply_project_config, setup_project
 from ..project.sync import check_project_sync
-from ..hooks.config import disable_hook, enable_hook
-from ..hooks.listing import hook_list_lines
-from ..skills.config import disable_skill, enable_skill
-from ..skills.listing import skill_list_lines
 from ..tui.cli import run_tui_command
 from .parser import build_parser
 
@@ -135,8 +134,7 @@ def _dispatch(
         return run_codexmgr_home_action(codexmgr_home, args.cd_action, stdout)
 
     if args.command == "codex":
-        apply_project_config(cwd, codex_home, codexmgr_home)
-        return run_codex(cwd, args.codex_args)
+        return run_codex_command(cwd, codex_home, codexmgr_home, args.codex_args)
 
     if args.command == "agentsmd" and args.agentsmd_command == "list":
         options = list_agentsmd_options(codexmgr_home)
@@ -154,82 +152,16 @@ def _dispatch(
         return 0
 
     if args.command == "agentsmd" and args.agentsmd_command == "add":
-        source_id = add_agentsmd(args.reference, cwd, codexmgr_home)
-        return _finish_config_change(
-            f"Added {source_id}",
-            args.no_sync,
-            cwd,
-            codex_home,
-            codexmgr_home,
-            stdout,
-        )
+        return run_agentsmd_mutation(args, cwd, codex_home, codexmgr_home, stdout)
 
     if args.command == "agentsmd" and args.agentsmd_command == "remove":
-        source_id = remove_agentsmd(args.source_id, cwd)
-        return _finish_config_change(
-            f"Removed {source_id}",
-            args.no_sync,
-            cwd,
-            codex_home,
-            codexmgr_home,
-            stdout,
-        )
+        return run_agentsmd_mutation(args, cwd, codex_home, codexmgr_home, stdout)
 
-    if args.command == "skill" and args.skill_command == "list":
-        lines = skill_list_lines(cwd, codex_home, codexmgr_home)
-        if lines:
-            stdout.write("\n".join(lines) + "\n")
-        return 0
+    if args.command == "skill":
+        return run_skill_command(args, cwd, codex_home, codexmgr_home, stdout)
 
-    if args.command == "skill" and args.skill_command == "enable":
-        skill = enable_skill(args.skill, cwd)
-        return _finish_config_change(
-            f"Enabled {skill}",
-            args.no_sync,
-            cwd,
-            codex_home,
-            codexmgr_home,
-            stdout,
-        )
-
-    if args.command == "skill" and args.skill_command == "disable":
-        skill = disable_skill(args.skill, cwd)
-        return _finish_config_change(
-            f"Disabled {skill}",
-            args.no_sync,
-            cwd,
-            codex_home,
-            codexmgr_home,
-            stdout,
-        )
-
-    if args.command == "hooks" and args.hooks_command == "list":
-        lines = hook_list_lines(cwd, codexmgr_home)
-        if lines:
-            stdout.write("\n".join(lines) + "\n")
-        return 0
-
-    if args.command == "hooks" and args.hooks_command == "enable":
-        hook = enable_hook(args.hook, cwd, codexmgr_home)
-        return _finish_config_change(
-            f"Enabled {hook}",
-            args.no_sync,
-            cwd,
-            codex_home,
-            codexmgr_home,
-            stdout,
-        )
-
-    if args.command == "hooks" and args.hooks_command == "disable":
-        hook = disable_hook(args.hook, cwd)
-        return _finish_config_change(
-            f"Disabled {hook}",
-            args.no_sync,
-            cwd,
-            codex_home,
-            codexmgr_home,
-            stdout,
-        )
+    if args.command == "hooks":
+        return run_hooks_command(args, cwd, codex_home, codexmgr_home, stdout)
 
     if args.command == "package":
         return run_package_command(args, cwd, codex_home, codexmgr_home, stdout)
@@ -252,32 +184,3 @@ def _dispatch(
         return 0
 
     raise CommandError(f"Unsupported command: {args.command}")
-
-
-def _finish_config_change(
-    message: str,
-    no_sync: bool,
-    cwd: Path,
-    codex_home: Path,
-    codexmgr_home: Path,
-    stdout: TextIO,
-) -> int:
-    """Apply generated files after a project config mutation unless opted out.
-
-    Args:
-        message: Command-specific success message to write after all work succeeds.
-        no_sync: Whether the command should skip the automatic apply step.
-        cwd: Project directory whose configuration changed.
-        codex_home: Global Codex home for resolving named skills during apply.
-        codexmgr_home: codexmgr home for resolving named AGENTS.md templates.
-        stdout: Stream for command output.
-
-    Returns:
-        Zero when the mutation and optional apply step succeed.
-    """
-    messages = [message]
-    if not no_sync:
-        apply_project_config(cwd, codex_home, codexmgr_home)
-        messages.append("Applied project Codex configuration")
-    stdout.write("\n".join(messages) + "\n")
-    return 0

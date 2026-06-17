@@ -96,11 +96,15 @@ def _add_agentsmd_parser(subparsers: argparse._SubParsersAction) -> None:
 
     add = agentsmd_subparsers.add_parser("add", help="Add an AGENTS.md template")
     _add_no_sync_argument(add)
-    add.add_argument("reference", help="Template name or TOML file path")
+    add.add_argument(
+        "references",
+        nargs="+",
+        help="Template names or TOML file paths",
+    )
 
     remove = agentsmd_subparsers.add_parser("remove", help="Remove a template")
     _add_no_sync_argument(remove)
-    remove.add_argument("source_id", help="Template source identifier")
+    remove.add_argument("source_ids", nargs="+", help="Template source identifiers")
 
     agentsmd_subparsers.add_parser("list", help="List available templates")
 
@@ -125,11 +129,11 @@ def _add_skill_parser(subparsers: argparse._SubParsersAction) -> None:
 
     enable = skill_subparsers.add_parser("enable", help="Enable a skill")
     _add_no_sync_argument(enable)
-    enable.add_argument("skill", help="Skill name or path")
+    enable.add_argument("skills", nargs="+", help="Skill names or paths")
 
     disable = skill_subparsers.add_parser("disable", help="Disable a skill")
     _add_no_sync_argument(disable)
-    disable.add_argument("skill", help="Skill name or path")
+    disable.add_argument("skills", nargs="+", help="Skill names or paths")
 
     skill_subparsers.add_parser("list", help="List available and configured skills")
 
@@ -148,11 +152,11 @@ def _add_hooks_parser(subparsers: argparse._SubParsersAction) -> None:
 
     enable = hooks_subparsers.add_parser("enable", help="Enable a hook bundle")
     _add_no_sync_argument(enable)
-    enable.add_argument("hook", help="Hook bundle name")
+    enable.add_argument("hooks", nargs="+", help="Hook bundle names")
 
     disable = hooks_subparsers.add_parser("disable", help="Disable a hook bundle")
     _add_no_sync_argument(disable)
-    disable.add_argument("hook", help="Hook bundle name")
+    disable.add_argument("hooks", nargs="+", help="Hook bundle names")
 
     hooks_subparsers.add_parser("list", help="List available and configured hooks")
 
@@ -176,11 +180,13 @@ def _add_package_parser(subparsers: argparse._SubParsersAction) -> None:
 
     enable = package_subparsers.add_parser("enable", help="Enable a package")
     _add_no_sync_argument(enable)
-    enable.add_argument("package", help="Package name")
+    _add_profiles_argument(enable)
+    enable.add_argument("packages", nargs="+", help="Package names")
 
     disable = package_subparsers.add_parser("disable", help="Disable a package")
     _add_no_sync_argument(disable)
-    disable.add_argument("package", help="Package name")
+    _add_profiles_argument(disable)
+    disable.add_argument("packages", nargs="+", help="Package names")
 
 
 def _add_tui_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -229,4 +235,23 @@ def _add_no_sync_argument(parser: argparse.ArgumentParser) -> None:
         "--no-sync",
         action="store_true",
         help="Do not run apply after updating codexmgr.toml",
+    )
+
+
+def _add_profiles_argument(parser: argparse.ArgumentParser) -> None:
+    """Add package profile selection flags to a parser.
+
+    Args:
+        parser: Subcommand parser for package profile-aware mutations.
+
+    Returns:
+        None. The parser is mutated in place.
+    """
+    parser.add_argument(
+        "--profile",
+        dest="profiles",
+        action="extend",
+        nargs="+",
+        default=[],
+        help="Package profile names to merge into the package selection",
     )

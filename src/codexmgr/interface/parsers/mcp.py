@@ -29,11 +29,11 @@ def add_mcp_parser(
 
     enable = mcp_subparsers.add_parser("enable", help="Enable an MCP server locally")
     add_no_sync_argument(enable)
-    enable.add_argument("server_id", help="MCP server id")
+    enable.add_argument("server_ids", nargs="+", help="MCP server ids")
 
     disable = mcp_subparsers.add_parser("disable", help="Disable an MCP server locally")
     add_no_sync_argument(disable)
-    disable.add_argument("server_id", help="MCP server id")
+    disable.add_argument("server_ids", nargs="+", help="MCP server ids")
 
     token = mcp_subparsers.add_parser(
         "set-token-env",

@@ -10,6 +10,22 @@ from ..core.toml_io import load_toml_file, plain_toml_value
 from .sources import require_package_config
 
 SUPPORTED_KEYS = ("agentsmd", "hooks", "skills")
+TOP_LEVEL_KEYS = (*SUPPORTED_KEYS, "profiles")
+
+
+@dataclass(frozen=True)
+class PackageEntries:
+    """Reusable package entries for one root or profile section.
+
+    Attributes:
+        agentsmd: AGENTS.md template references to add or remove.
+        hooks: Hook bundle names to enable or disable.
+        skills: Skill references to enable or disable.
+    """
+
+    agentsmd: list[str]
+    hooks: list[str]
+    skills: list[str]
 
 
 @dataclass(frozen=True)
@@ -21,12 +37,14 @@ class PackageConfig:
         agentsmd: AGENTS.md template references to add or remove.
         hooks: Hook bundle names to enable or disable.
         skills: Skill references to enable or disable.
+        profiles: Optional named profile entries keyed by profile name.
     """
 
     name: str
     agentsmd: list[str]
     hooks: list[str]
     skills: list[str]
+    profiles: dict[str, PackageEntries]
 
 
 def load_package_config(name: str, codexmgr_home: Path) -> PackageConfig:
@@ -58,17 +76,78 @@ def parse_package_config(
     Returns:
         Validated package configuration.
     """
-    unsupported = sorted(key for key in data if key not in SUPPORTED_KEYS)
+    unsupported = sorted(key for key in data if key not in TOP_LEVEL_KEYS)
     if unsupported:
         raise CommandError(f"Unsupported package config key: {unsupported[0]}")
-    if not any(key in data for key in SUPPORTED_KEYS):
-        raise CommandError(f"Package config must include agentsmd, hooks, or skills: {path}")
+    if not any(key in data for key in TOP_LEVEL_KEYS):
+        raise CommandError(
+            f"Package config must include agentsmd, hooks, skills, or profiles: {path}"
+        )
     return PackageConfig(
         name=name,
         agentsmd=_string_list(data, "agentsmd", path),
         hooks=_string_list(data, "hooks", path),
         skills=_string_list(data, "skills", path),
+        profiles=_profiles(data, path),
     )
+
+
+def selected_package_entries(
+    package: PackageConfig,
+    profile_names: list[str],
+) -> PackageEntries:
+    """Return root package entries plus the requested profile entries.
+
+    Args:
+        package: Loaded package configuration.
+        profile_names: Profile names to merge into the selected entries.
+
+    Returns:
+        Dedupe-preserving combined package entries.
+    """
+    agentsmd = list(package.agentsmd)
+    hooks = list(package.hooks)
+    skills = list(package.skills)
+    for profile_name in profile_names:
+        profile = package.profiles.get(profile_name)
+        if profile is None:
+            raise CommandError(
+                f"Package profile not found: {package.name}.{profile_name}"
+            )
+        agentsmd = _append_unique(agentsmd, profile.agentsmd)
+        hooks = _append_unique(hooks, profile.hooks)
+        skills = _append_unique(skills, profile.skills)
+    return PackageEntries(agentsmd=agentsmd, hooks=hooks, skills=skills)
+
+
+def _profiles(data: Mapping[str, Any], path: Path) -> dict[str, PackageEntries]:
+    """Read optional profile tables from package config.
+
+    Args:
+        data: Parsed package TOML mapping.
+        path: Source config path used in error messages.
+
+    Returns:
+        Profile entries keyed by profile name.
+    """
+    profiles = data.get("profiles", {})
+    if not isinstance(profiles, Mapping):
+        raise CommandError(f"{path} profiles must be a table")
+    parsed: dict[str, PackageEntries] = {}
+    for name, table in profiles.items():
+        if not isinstance(table, Mapping):
+            raise CommandError(f"{path} profiles.{name} must be a table")
+        unsupported = sorted(key for key in table if key not in SUPPORTED_KEYS)
+        if unsupported:
+            raise CommandError(
+                f"Unsupported package profile key: {name}.{unsupported[0]}"
+            )
+        parsed[name] = PackageEntries(
+            agentsmd=_string_list(table, "agentsmd", path),
+            hooks=_string_list(table, "hooks", path),
+            skills=_string_list(table, "skills", path),
+        )
+    return parsed
 
 
 def _string_list(data: Mapping[str, Any], key: str, path: Path) -> list[str]:
@@ -86,3 +165,20 @@ def _string_list(data: Mapping[str, Any], key: str, path: Path) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise CommandError(f"{path} {key} must be a list of strings")
     return list(value)
+
+
+def _append_unique(values: list[str], additions: list[str]) -> list[str]:
+    """Append missing additions while preserving first-seen order.
+
+    Args:
+        values: Existing values.
+        additions: Candidate values to append.
+
+    Returns:
+        Combined list without duplicate entries.
+    """
+    combined = list(values)
+    for addition in additions:
+        if addition not in combined:
+            combined.append(addition)
+    return combined

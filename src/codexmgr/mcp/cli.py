@@ -38,11 +38,18 @@ def run_mcp_command(
     if command == "validate":
         _write_lines(stdout, mcp.validate_overrides(cwd))
         return 0
-    message = _mutate(args, cwd)
-    return _finish_mcp_change(message, args.no_sync, cwd, codex_home, codexmgr_home, stdout)
+    messages = _mutate(args, cwd)
+    return _finish_mcp_change(
+        messages,
+        args.no_sync,
+        cwd,
+        codex_home,
+        codexmgr_home,
+        stdout,
+    )
 
 
-def _mutate(args: argparse.Namespace, cwd: Path) -> str:
+def _mutate(args: argparse.Namespace, cwd: Path) -> list[str]:
     """Run one mutating MCP command.
 
     Args:
@@ -50,33 +57,33 @@ def _mutate(args: argparse.Namespace, cwd: Path) -> str:
         cwd: Project directory.
 
     Returns:
-        User-facing success message.
+        User-facing success messages.
     """
     command = args.mcp_command
     if command == "enable":
-        server_id = mcp.set_enabled(cwd, args.server_id, True)
-        return f"Enabled MCP server override {server_id}"
+        server_ids = mcp.set_enabled_many(cwd, args.server_ids, True)
+        return [f"Enabled MCP server override {server_id}" for server_id in server_ids]
     if command == "disable":
-        server_id = mcp.set_enabled(cwd, args.server_id, False)
-        return f"Disabled MCP server override {server_id}"
+        server_ids = mcp.set_enabled_many(cwd, args.server_ids, False)
+        return [f"Disabled MCP server override {server_id}" for server_id in server_ids]
     if command == "set-token-env":
         server_id = mcp.set_token_env(cwd, args.server_id, args.env_var)
-        return f"Updated MCP server override {server_id} bearer_token_env_var"
+        return [f"Updated MCP server override {server_id} bearer_token_env_var"]
     if command == "add-env-var":
         server_id = mcp.add_env_var(cwd, args.server_id, args.env_var)
-        return f"Updated MCP server override {server_id} env_vars"
+        return [f"Updated MCP server override {server_id} env_vars"]
     if command == "remove-env-var":
         server_id = mcp.remove_env_var(cwd, args.server_id, args.env_var)
-        return f"Updated MCP server override {server_id} env_vars"
+        return [f"Updated MCP server override {server_id} env_vars"]
     if command == "set-env-header":
         server_id = mcp.set_env_header(cwd, args.server_id, args.header, args.env_var)
-        return f"Updated MCP server override {server_id} env_http_headers"
+        return [f"Updated MCP server override {server_id} env_http_headers"]
     if command == "unset-env-header":
         server_id = mcp.unset_env_header(cwd, args.server_id, args.header)
-        return f"Updated MCP server override {server_id} env_http_headers"
+        return [f"Updated MCP server override {server_id} env_http_headers"]
     if command == "set-field":
         server_id = mcp.set_field(cwd, args.server_id, args.field, args.value)
-        return f"Updated MCP server override {server_id} {args.field}"
+        return [f"Updated MCP server override {server_id} {args.field}"]
     raise AssertionError(f"Unhandled mcp command: {command}")
 
 
@@ -152,7 +159,7 @@ def _override_state(fields: dict) -> str:
 
 
 def _finish_mcp_change(
-    message: str,
+    messages: list[str],
     no_sync: bool,
     cwd: Path,
     codex_home: Path,
@@ -162,7 +169,7 @@ def _finish_mcp_change(
     """Apply project config after an MCP mutation unless opted out.
 
     Args:
-        message: User-facing mutation message.
+        messages: User-facing mutation messages.
         no_sync: Whether to skip apply.
         cwd: Project directory.
         codex_home: Codex home used by apply.
@@ -172,11 +179,11 @@ def _finish_mcp_change(
     Returns:
         Zero when successful.
     """
-    messages = [message]
+    output = list(messages)
     if not no_sync:
         apply_project_config(cwd, codex_home, codexmgr_home)
-        messages.append("Applied project Codex configuration")
-    stdout.write("\n".join(messages) + "\n")
+        output.append("Applied project Codex configuration")
+    stdout.write("\n".join(output) + "\n")
     return 0
 
 

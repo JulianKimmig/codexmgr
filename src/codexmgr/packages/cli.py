@@ -7,7 +7,7 @@ from typing import TextIO
 from ..core.errors import CommandError
 from ..project.apply import apply_project_config
 from .listing import package_list_lines
-from .mutation import disable_package, enable_package
+from .mutation import disable_packages, enable_packages
 
 
 def run_package_command(
@@ -36,9 +36,9 @@ def run_package_command(
         return 0
 
     if args.package_command == "enable":
-        name = enable_package(args.package, cwd, codexmgr_home)
+        names = enable_packages(args.packages, cwd, codexmgr_home, args.profiles)
         return _finish_package_change(
-            f"Enabled package {name}",
+            _package_messages("Enabled", names, args.profiles),
             args.no_sync,
             cwd,
             codex_home,
@@ -47,9 +47,9 @@ def run_package_command(
         )
 
     if args.package_command == "disable":
-        name = disable_package(args.package, cwd, codexmgr_home)
+        names = disable_packages(args.packages, cwd, codexmgr_home, args.profiles)
         return _finish_package_change(
-            f"Disabled package {name}",
+            _package_messages("Disabled", names, args.profiles),
             args.no_sync,
             cwd,
             codex_home,
@@ -61,7 +61,7 @@ def run_package_command(
 
 
 def _finish_package_change(
-    message: str,
+    messages: list[str],
     no_sync: bool,
     cwd: Path,
     codex_home: Path,
@@ -71,7 +71,8 @@ def _finish_package_change(
     """Apply generated files after a package mutation unless opted out.
 
     Args:
-        message: Command-specific success message to write after all work succeeds.
+        messages: Command-specific success messages to write after all work
+            succeeds.
         no_sync: Whether the command should skip the automatic apply step.
         cwd: Project directory whose configuration changed.
         codex_home: Global Codex home for resolving named skills during apply.
@@ -81,9 +82,28 @@ def _finish_package_change(
     Returns:
         Zero when the mutation and optional apply step succeed.
     """
-    messages = [message]
+    output = list(messages)
     if not no_sync:
         apply_project_config(cwd, codex_home, codexmgr_home)
-        messages.append("Applied project Codex configuration")
-    stdout.write("\n".join(messages) + "\n")
+        output.append("Applied project Codex configuration")
+    stdout.write("\n".join(output) + "\n")
     return 0
+
+
+def _package_messages(
+    verb: str,
+    names: list[str],
+    profiles: list[str],
+) -> list[str]:
+    """Build user-facing package mutation messages.
+
+    Args:
+        verb: Leading mutation verb, such as ``Enabled`` or ``Disabled``.
+        names: Mutated package names.
+        profiles: Selected package profiles.
+
+    Returns:
+        One message per package.
+    """
+    suffix = f" (profiles: {', '.join(profiles)})" if profiles else ""
+    return [f"{verb} package {name}{suffix}" for name in names]

@@ -160,6 +160,57 @@ def test_hooks_enable_does_not_duplicate_entries(
     ]
 
 
+def test_hooks_enable_and_disable_accept_multiple_bundles(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """hooks enable and disable accept multiple hook bundle names per call."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_hook_bundle(codexmgr_home, "rules")
+    _write_hook_bundle(codexmgr_home, "audit")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+
+    enable_exit, enable_stdout, enable_stderr = run_cli_with_homes(
+        ["hooks", "enable", "rules", "audit"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert enable_exit == 0
+    assert enable_stderr == ""
+    assert enable_stdout == (
+        "Enabled rules\n"
+        "Enabled audit\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["hooks"] == {
+        "enabled": ["rules", "audit"],
+        "disabled": [],
+    }
+
+    disable_exit, disable_stdout, disable_stderr = run_cli_with_homes(
+        ["hooks", "disable", "rules", "audit"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert disable_exit == 0
+    assert disable_stderr == ""
+    assert disable_stdout == (
+        "Disabled rules\n"
+        "Disabled audit\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["hooks"] == {
+        "enabled": [],
+        "disabled": ["rules", "audit"],
+    }
+
+
 def test_hooks_disable_removes_managed_handlers_and_copy(
     workspace,
     run_cli_with_homes,

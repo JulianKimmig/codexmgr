@@ -202,6 +202,175 @@ def test_package_enable_does_not_duplicate_existing_entries(
     assert config["skills"]["enabled"] == ["repo-rule-manager"]
 
 
+def test_package_enable_accepts_multiple_packages(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """package enable accepts multiple package names and applies once."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_hook_bundle(codexmgr_home, "repo-rules")
+    _write_hook_bundle(codexmgr_home, "audit")
+    _write_package(codexmgr_home, "repo-rules", 'hooks = ["repo-rules"]\n')
+    _write_package(codexmgr_home, "audit", 'hooks = ["audit"]\nskills = ["review"]\n')
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["package", "enable", "repo-rules", "audit"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert stdout == (
+        "Enabled package repo-rules\n"
+        "Enabled package audit\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["hooks"]["enabled"] == ["repo-rules", "audit"]
+    assert read_project_config(project)["skills"]["enabled"] == ["review"]
+
+
+def test_package_enable_accepts_multiple_profiles(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """package enable applies root entries plus repeated multi-value profiles."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_hook_bundle(codexmgr_home, "repo-rules")
+    _write_hook_bundle(codexmgr_home, "coding-hook")
+    _write_package(
+        codexmgr_home,
+        "repo-rules",
+        '''
+hooks = ["repo-rules"]
+skills = ["base-skill"]
+
+[profiles.strict]
+skills = ["strict-skill"]
+
+[profiles.coding]
+hooks = ["coding-hook"]
+
+[profiles.python]
+skills = ["python-skill"]
+''',
+    )
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        [
+            "package",
+            "enable",
+            "repo-rules",
+            "--profile",
+            "strict",
+            "coding",
+            "--profile",
+            "python",
+        ],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert stdout == (
+        "Enabled package repo-rules (profiles: strict, coding, python)\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["hooks"] == {
+        "enabled": ["repo-rules", "coding-hook"],
+        "disabled": [],
+    }
+    assert read_project_config(project)["skills"] == {
+        "enabled": ["base-skill", "strict-skill", "python-skill"],
+        "disabled": [],
+    }
+
+
+def test_package_disable_accepts_profiles(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """package disable applies disable semantics to selected profile entries."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_hook_bundle(codexmgr_home, "repo-rules")
+    _write_package(
+        codexmgr_home,
+        "repo-rules",
+        '''
+hooks = ["repo-rules"]
+skills = ["base-skill"]
+
+[profiles.strict]
+skills = ["strict-skill"]
+''',
+    )
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(
+        ["package", "enable", "repo-rules", "--profile", "strict"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["package", "disable", "repo-rules", "--profile", "strict"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert stdout == (
+        "Disabled package repo-rules (profiles: strict)\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["hooks"] == {
+        "enabled": [],
+        "disabled": ["repo-rules"],
+    }
+    assert read_project_config(project)["skills"] == {
+        "enabled": [],
+        "disabled": ["base-skill", "strict-skill"],
+    }
+
+
+def test_package_enable_rejects_missing_profile_before_writing(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """Missing package profiles fail before project config mutation."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_hook_bundle(codexmgr_home, "repo-rules")
+    _write_package(codexmgr_home, "repo-rules", 'hooks = ["repo-rules"]\n')
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["package", "enable", "repo-rules", "--profile", "missing"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 1
+    assert stdout == ""
+    assert "Package profile not found: repo-rules.missing" in stderr
+    assert read_project_config(project) == {}
+
+
 def test_package_enable_fails_for_missing_package(workspace, run_cli_with_homes):
     """package enable fails when the named package config does not exist."""
     project, codex_home = workspace

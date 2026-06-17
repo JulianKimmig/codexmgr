@@ -146,6 +146,11 @@ file that can contain `agentsmd`, `hooks`, and `skills` string lists:
 agentsmd = []
 hooks = ["repo-rules"]
 skills = ["repo-rule-manager"]
+
+[profiles.strict]
+agentsmd = ["strict-coding"]
+hooks = ["strict-rules"]
+skills = ["strict-review"]
 ```
 
 `codexmgr package enable <name>` validates package AGENTS.md and hook
@@ -153,6 +158,21 @@ references, then updates `.codex/codexmgr.toml` as if the corresponding
 `agentsmd add`, `hooks enable`, and `skill enable` commands had been run.
 `codexmgr package disable <name>` removes package AGENTS.md entries when
 present and disables the package skills and hooks.
+
+Package profiles are merged with the root package entries:
+
+```bash
+codexmgr package enable repo-rules --profile strict coding --profile python
+```
+
+Direct mutating commands also accept batch targets, for example:
+
+```bash
+codexmgr agentsmd add coding python
+codexmgr skill enable review-helper repo-rule-manager
+codexmgr hooks enable repo-rules audit
+codexmgr mcp enable browsermcp context7
+```
 
 Mutating commands run `apply` automatically unless `--no-sync` is passed.
 Project guidelines require `apply` whenever `.codex/codexmgr.toml` changes,
@@ -219,23 +239,23 @@ codexmgr tui [--no-sync] [--show-diff]
 codexmgr agentsmd list
 codexmgr agentsmd show <name-or-template-path>
 codexmgr agentsmd validate <name-or-template-path>
-codexmgr agentsmd add [--no-sync] <name-or-template-path>
-codexmgr agentsmd remove [--no-sync] <name-or-template-path>
+codexmgr agentsmd add [--no-sync] <name-or-template-path> [...]
+codexmgr agentsmd remove [--no-sync] <name-or-template-path> [...]
 codexmgr init-template agentsmd <name>
 codexmgr skill list
-codexmgr skill enable [--no-sync] <name-or-skill-path>
-codexmgr skill disable [--no-sync] <name-or-skill-path>
+codexmgr skill enable [--no-sync] <name-or-skill-path> [...]
+codexmgr skill disable [--no-sync] <name-or-skill-path> [...]
 codexmgr hooks list
-codexmgr hooks enable [--no-sync] <hook-name>
-codexmgr hooks disable [--no-sync] <hook-name>
+codexmgr hooks enable [--no-sync] <hook-name> [...]
+codexmgr hooks disable [--no-sync] <hook-name> [...]
 codexmgr package list
-codexmgr package enable [--no-sync] <package-name>
-codexmgr package disable [--no-sync] <package-name>
+codexmgr package enable [--no-sync] <package-name> [...] [--profile <name> [...]]
+codexmgr package disable [--no-sync] <package-name> [...] [--profile <name> [...]]
 codexmgr mcp list
 codexmgr mcp show <server-id>
 codexmgr mcp validate
-codexmgr mcp enable [--no-sync] <server-id>
-codexmgr mcp disable [--no-sync] <server-id>
+codexmgr mcp enable [--no-sync] <server-id> [...]
+codexmgr mcp disable [--no-sync] <server-id> [...]
 codexmgr mcp set-token-env [--no-sync] <server-id> <ENV_VAR>
 codexmgr mcp add-env-var [--no-sync] <server-id> <ENV_VAR>
 codexmgr mcp remove-env-var [--no-sync] <server-id> <ENV_VAR>
@@ -269,6 +289,14 @@ files.
 
 `status` prints the resolved homes, configured snippets, skills, hooks, and
 whether generated files are in sync.
+
+`codexmgr codex` can run with a just-in-time package/profile overlay without
+changing `.codex/codexmgr.toml`. Put Codex arguments after `--` when using this
+syntax:
+
+```bash
+codexmgr codex repo-rules --profile strict coding --profile python -- exec "review this"
+```
 
 ## Project MCP Overrides
 

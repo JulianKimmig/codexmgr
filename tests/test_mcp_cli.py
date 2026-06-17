@@ -70,6 +70,57 @@ def test_mcp_disable_no_sync_updates_only_codexmgr_toml(
     assert not (codex_home / "config.toml").exists()
 
 
+def test_mcp_enable_and_disable_accept_multiple_servers(
+    workspace,
+    run_cli,
+    read_project_config,
+    read_codex_config,
+):
+    """mcp enable and disable accept multiple server ids per call."""
+    project, codex_home = workspace
+    run_cli(["setup"], project, codex_home)
+
+    enable_exit, enable_stdout, enable_stderr = run_cli(
+        ["mcp", "enable", "browsermcp", "context7"],
+        project,
+        codex_home,
+    )
+
+    assert enable_exit == 0
+    assert enable_stderr == ""
+    assert enable_stdout == (
+        "Enabled MCP server override browsermcp\n"
+        "Enabled MCP server override context7\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["mcp"]["servers"] == {
+        "browsermcp": {"enabled": True},
+        "context7": {"enabled": True},
+    }
+    assert read_codex_config(project)["mcp_servers"] == {
+        "browsermcp": {"enabled": True},
+        "context7": {"enabled": True},
+    }
+
+    disable_exit, disable_stdout, disable_stderr = run_cli(
+        ["mcp", "disable", "browsermcp", "context7"],
+        project,
+        codex_home,
+    )
+
+    assert disable_exit == 0
+    assert disable_stderr == ""
+    assert disable_stdout == (
+        "Disabled MCP server override browsermcp\n"
+        "Disabled MCP server override context7\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["mcp"]["servers"] == {
+        "browsermcp": {"enabled": False},
+        "context7": {"enabled": False},
+    }
+
+
 def test_mcp_mutation_preserves_codexmgr_toml_comments(workspace, run_cli):
     """MCP mutations preserve existing comments in project codexmgr.toml."""
     project, codex_home = workspace

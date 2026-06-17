@@ -136,6 +136,51 @@ text = "foo"
     assert read_project_config(project)["agents_md"]["src"] == ["coding"]
 
 
+def test_agentsmd_add_and_remove_accept_multiple_sources(
+    workspace,
+    write_home_template,
+    run_cli,
+    read_project_config,
+    assert_agents_md,
+):
+    """agentsmd add and remove accept multiple source references per call."""
+    project, codex_home = workspace
+    write_home_template(codex_home, "coding", "[rules]\ntext = \"coding\"\n")
+    write_home_template(codex_home, "python", "[rules]\ntext = \"python\"\n")
+    run_cli(["setup"], project, codex_home)
+
+    add_exit, add_stdout, add_stderr = run_cli(
+        ["agentsmd", "add", "coding", "python"],
+        project,
+        codex_home,
+    )
+
+    assert add_exit == 0
+    assert add_stderr == ""
+    assert add_stdout == (
+        "Added coding\n"
+        "Added python\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["agents_md"]["src"] == ["coding", "python"]
+
+    remove_exit, remove_stdout, remove_stderr = run_cli(
+        ["agentsmd", "remove", "coding", "python"],
+        project,
+        codex_home,
+    )
+
+    assert remove_exit == 0
+    assert remove_stderr == ""
+    assert remove_stdout == (
+        "Removed coding\n"
+        "Removed python\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["agents_md"]["src"] == []
+    assert_agents_md(project, "")
+
+
 def test_add_named_template_uses_codexmgr_home_environment(
     workspace,
     monkeypatch,

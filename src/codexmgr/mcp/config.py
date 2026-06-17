@@ -104,6 +104,27 @@ def set_enabled(cwd: Path, server_id: str, enabled: bool) -> str:
     return _mutate_server(cwd, server_id, lambda table: set_enabled_value(table, enabled))
 
 
+def set_enabled_many(cwd: Path, server_ids: list[str], enabled: bool) -> list[str]:
+    """Set enabled overrides for multiple MCP servers in one config write.
+
+    Args:
+        cwd: Project directory.
+        server_ids: MCP server ids to update.
+        enabled: Desired enabled state.
+
+    Returns:
+        Updated server ids.
+    """
+    require_codex_dir(cwd)
+    config = load_optional_toml_file(config_path(cwd))
+    for server_id in server_ids:
+        server = ensure_server(config, server_id)
+        set_enabled_value(server, enabled)
+        validate_override(server_id, server, strict=True)
+    write_toml_file(config_path(cwd), config)
+    return list(server_ids)
+
+
 def set_enabled_in_config(
     config: MutableMapping[str, Any],
     server_id: str,

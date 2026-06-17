@@ -97,6 +97,57 @@ def test_skill_enable_does_not_duplicate_entries(workspace, run_cli, read_projec
     assert read_project_config(project)["skills"]["enabled"] == ["coding"]
 
 
+def test_skill_enable_and_disable_accept_multiple_skills(
+    workspace,
+    run_cli,
+    read_project_config,
+    read_codex_config,
+):
+    """skill enable and disable accept multiple references per command."""
+    project, codex_home = workspace
+    run_cli(["setup"], project, codex_home)
+
+    enable_exit, enable_stdout, enable_stderr = run_cli(
+        ["skill", "enable", "coding", "python"],
+        project,
+        codex_home,
+    )
+
+    assert enable_exit == 0
+    assert enable_stderr == ""
+    assert enable_stdout == (
+        "Enabled coding\n"
+        "Enabled python\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["skills"] == {
+        "enabled": ["coding", "python"],
+        "disabled": [],
+    }
+
+    disable_exit, disable_stdout, disable_stderr = run_cli(
+        ["skill", "disable", "coding", "python"],
+        project,
+        codex_home,
+    )
+
+    assert disable_exit == 0
+    assert disable_stderr == ""
+    assert disable_stdout == (
+        "Disabled coding\n"
+        "Disabled python\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project)["skills"] == {
+        "enabled": [],
+        "disabled": ["coding", "python"],
+    }
+    assert read_codex_config(project)["skills"]["config"] == [
+        {"name": "coding", "enabled": False},
+        {"name": "python", "enabled": False},
+    ]
+
+
 def test_skill_path_is_stored_as_given(workspace, run_cli, read_project_config):
     """skill commands accept path-like values and store them unchanged."""
     project, codex_home = workspace

@@ -57,7 +57,15 @@ def apply_project_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> No
         codex_home: Global Codex home used to resolve named skills.
         codexmgr_home: codexmgr home used to resolve named AGENTS.md sources.
     """
-    state = build_project_state(cwd, codex_home, codexmgr_home)
+    apply_project_state(build_project_state(cwd, codex_home, codexmgr_home))
+
+
+def apply_project_state(state: ProjectBuild) -> None:
+    """Apply a prebuilt project generated state.
+
+    Args:
+        state: Expected generated project state to write.
+    """
     for target in state.obsolete_skill_copy_targets:
         remove_skill_copy_target(target)
     for target in state.obsolete_hook_copy_targets:

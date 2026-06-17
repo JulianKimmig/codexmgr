@@ -9,6 +9,33 @@ from typing import Any
 from ..core.errors import CommandError
 from ..core.paths import codex_config_path
 from ..core.toml_io import format_toml_value, load_optional_toml_file
+from .codex_jit import parse_codex_jit_request, run_with_jit_overlay
+
+
+def run_codex_command(
+    cwd: Path,
+    codex_home: Path,
+    codexmgr_home: Path,
+    codex_args: list[str],
+) -> int:
+    """Apply project config and run Codex, optionally with a JIT overlay.
+
+    Args:
+        cwd: Project working directory for the external Codex process.
+        codex_home: Codex home used to resolve project skills.
+        codexmgr_home: codexmgr home containing package sources.
+        codex_args: Raw arguments after ``codexmgr codex``.
+
+    Returns:
+        The external Codex process return code.
+    """
+    request = parse_codex_jit_request(codex_args)
+    if request.enabled:
+        return run_with_jit_overlay(request, cwd, codex_home, codexmgr_home, run_codex)
+    from ..project.apply import apply_project_config
+
+    apply_project_config(cwd, codex_home, codexmgr_home)
+    return run_codex(cwd, codex_args)
 
 
 def run_codex(cwd: Path, codex_args: list[str]) -> int:
