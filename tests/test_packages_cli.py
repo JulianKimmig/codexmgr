@@ -93,6 +93,39 @@ skills = ["repo-rule-manager"]
     ).read_text(encoding="utf-8") == "print('rules')\n"
 
 
+def test_package_agents_list_enables_and_copies_custom_agent(
+    workspace,
+    run_cli_with_homes,
+    read_project_config,
+):
+    """Package agents lists enable custom agents without other package entries."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_agent(codexmgr_home, "reviewer")
+    _write_package(codexmgr_home, "agents-only", 'agents = ["reviewer"]\n')
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["package", "enable", "agents-only"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert stdout == (
+        "Enabled package agents-only\n"
+        "Applied project Codex configuration\n"
+    )
+    assert read_project_config(project) == {
+        "agents": {"enabled": ["reviewer"], "disabled": []},
+    }
+    assert (project / ".codex" / "agents" / "reviewer.toml").read_text(
+        encoding="utf-8",
+    ) == 'name = "agent"\n'
+
+
 def test_package_enable_applies_rules_and_profiles(
     workspace,
     run_cli_with_homes,

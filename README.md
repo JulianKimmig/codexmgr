@@ -237,6 +237,9 @@ skills = ["strict-review"]
 rules = ["python/testing.md"]
 ```
 
+The `agents` list enables custom agents from
+`$CODEXMGR_HOME/agents/<name>.toml`.
+
 `codexmgr package enable <name>` validates enabled package sources, then updates
 `.codex/codexmgr.toml` as if the corresponding resource commands had been run.
 
