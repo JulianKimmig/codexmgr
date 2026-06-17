@@ -12,6 +12,7 @@ from ..core.toml_io import (
     plain_toml_value,
     write_toml_file,
 )
+from .sources import resolve_skill_file
 
 
 def enable_skill(skill: str, cwd: Path) -> str:
@@ -253,44 +254,7 @@ def _skill_config_entry(
     Returns:
         A path-based entry when SKILL.md exists, otherwise a name-based entry.
     """
-    skill_file = _resolve_skill_file(skill, cwd, codex_home)
+    skill_file = resolve_skill_file(skill, cwd, codex_home, codex_home)
     if skill_file is None:
         return {"name": skill, "enabled": enabled}
     return {"path": str(skill_file), "enabled": enabled}
-
-
-def _resolve_skill_file(skill: str, cwd: Path, codex_home: Path) -> Path | None:
-    """Resolve a skill name or path to an existing SKILL.md file.
-
-    Args:
-        skill: Skill name or path from project config.
-        cwd: Project directory used to resolve relative paths.
-        codex_home: Global Codex home used to resolve named skills.
-
-    Returns:
-        Absolute SKILL.md path, or None when it cannot be resolved.
-    """
-    if _is_named_skill(skill):
-        skill_file = codex_home / "skills" / skill / "SKILL.md"
-    else:
-        path = Path(skill).expanduser()
-        if not path.is_absolute():
-            path = cwd / path
-        skill_file = path if path.name == "SKILL.md" else path / "SKILL.md"
-
-    if not skill_file.is_file():
-        return None
-    return skill_file.resolve()
-
-
-def _is_named_skill(skill: str) -> bool:
-    """Return whether a skill reference should resolve from CODEX_HOME.
-
-    Args:
-        skill: Skill reference from project configuration or CLI input.
-
-    Returns:
-        True when the reference is a bare skill name.
-    """
-    raw = skill.strip()
-    return "/" not in raw and "\\" not in raw and raw != "SKILL.md"

@@ -113,10 +113,13 @@ Named AGENTS.md templates resolve from `$CODEXMGR_HOME/agentsmd/<name>.toml`.
 Path-like template values resolve relative to the project unless they are
 absolute paths.
 
-Named skills resolve from `$CODEX_HOME/skills/<name>/SKILL.md`. If `CODEX_HOME`
-is unset, `~/.codex` is used. Path-like skill values resolve to either a
-`SKILL.md` file or a directory containing `SKILL.md`. Missing skills are written
-as name-based entries so Codex can resolve them later.
+Named skills resolve from `$CODEXMGR_HOME/skills/<name>/SKILL.md` or
+`$CODEX_HOME/skills/<name>/SKILL.md`; duplicate names across distinct homes
+fail. Enabled CODEXMGR_HOME skills are copied into `.agents/skills/<name>` on
+every apply by overlaying source files while preserving extra local files.
+Path-like skill values resolve to either a `SKILL.md` file or a directory
+containing `SKILL.md`. Missing skills are written as name-based entries so Codex
+can resolve them later.
 
 Mutating commands run `apply` automatically unless `--no-sync` is passed.
 Project guidelines require `apply` whenever `.codex/codexmgr.toml` changes,
@@ -281,8 +284,9 @@ is not present.
 `init-template agentsmd` creates a starter template under
 `$CODEXMGR_HOME/agentsmd` and refuses to overwrite an existing template.
 
-`skill list` prints available `$CODEX_HOME/skills/*/SKILL.md` entries and marks
-configured skills as enabled, disabled, or missing.
+`skill list` prints available `$CODEXMGR_HOME/skills/*/SKILL.md`,
+`$CODEX_HOME/skills/*/SKILL.md`, and local `.agents/skills/*/SKILL.md` entries
+and marks configured skills as enabled, disabled, or missing.
 
 `skill enable` and `skill disable` keep enabled and disabled lists mutually
 exclusive. Repeated commands keep one entry.

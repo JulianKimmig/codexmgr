@@ -129,6 +129,28 @@ disabled = []
     assert "ERROR Out of sync: .codex/config.toml" in stdout
 
 
+def test_doctor_reports_stale_managed_skill_copy(workspace, run_cli_with_homes):
+    """doctor reports stale managed skill copies."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_skill(codexmgr_home, "review")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(["skill", "enable", "review"], project, codex_home, codexmgr_home)
+    target_file = project / ".agents" / "skills" / "review" / "SKILL.md"
+    target_file.write_text("# Local edit\n", encoding="utf-8")
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["doctor"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 1
+    assert stderr == ""
+    assert "ERROR Out of sync: .agents/skills/review/SKILL.md" in stdout
+
+
 def test_doctor_warns_when_home_environment_variables_are_unset(
     workspace,
     run_cli,

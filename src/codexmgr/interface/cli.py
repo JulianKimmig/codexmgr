@@ -172,7 +172,7 @@ def _dispatch(
         )
 
     if args.command == "skill" and args.skill_command == "list":
-        lines = skill_list_lines(cwd, codex_home)
+        lines = skill_list_lines(cwd, codex_home, codexmgr_home)
         if lines:
             stdout.write("\n".join(lines) + "\n")
         return 0

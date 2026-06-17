@@ -75,7 +75,7 @@ def run_doctor(
         return 1
 
     _check_agents_sources(config, cwd, codexmgr_home, report)
-    _check_missing_enabled_skills(cwd, codex_home, report)
+    _check_missing_enabled_skills(cwd, codex_home, codexmgr_home, report)
     _check_generated_files(cwd, codex_home, codexmgr_home, report)
 
     has_errors = any(line.startswith("ERROR ") for line in report)
@@ -146,6 +146,7 @@ def _check_agents_sources(
 def _check_missing_enabled_skills(
     cwd: Path,
     codex_home: Path,
+    codexmgr_home: Path,
     report: list[str],
 ) -> None:
     """Check that enabled skill references resolve.
@@ -153,12 +154,13 @@ def _check_missing_enabled_skills(
     Args:
         cwd: Project directory whose configured skills should be checked.
         codex_home: Global Codex home used to resolve named skills.
+        codexmgr_home: codexmgr home used to resolve named skills.
         report: Mutable diagnostic report receiving any error.
 
     Returns:
         None.
     """
-    for skill in missing_enabled_skills(cwd, codex_home):
+    for skill in missing_enabled_skills(cwd, codex_home, codexmgr_home):
         report.append(f"ERROR Missing enabled skill: {skill}")
 
 

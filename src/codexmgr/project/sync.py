@@ -5,7 +5,8 @@ from difflib import unified_diff
 from pathlib import Path
 from typing import TextIO
 
-from .apply import build_project_files
+from .apply import GeneratedFile, build_project_state
+from ..skills.copies import SkillCopyFile
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,7 @@ class FileDiff:
         current_exists: Whether the generated file currently exists.
         current: Current file content, or an empty string when missing.
         expected: Expected generated file content.
+        binary: Whether either side could not be decoded as UTF-8 text.
     """
 
     path: Path
@@ -25,6 +27,7 @@ class FileDiff:
     current_exists: bool
     current: str
     expected: str
+    binary: bool = False
 
 
 def generated_file_diffs(
@@ -43,19 +46,15 @@ def generated_file_diffs(
         File differences for all out-of-sync generated outputs.
     """
     diffs: list[FileDiff] = []
-    for generated_file in build_project_files(cwd, codex_home, codexmgr_home):
-        current_exists = generated_file.path.exists()
-        current = _read_existing_text(generated_file.path)
-        if not current_exists or current != generated_file.content:
-            diffs.append(
-                FileDiff(
-                    generated_file.path,
-                    _display_path(cwd, generated_file.path),
-                    current_exists,
-                    current,
-                    generated_file.content,
-                )
-            )
+    state = build_project_state(cwd, codex_home, codexmgr_home)
+    for generated_file in state.files:
+        diff = _text_file_diff(cwd, generated_file)
+        if diff is not None:
+            diffs.append(diff)
+    for copy_file in state.copy_files:
+        diff = _copy_file_diff(cwd, copy_file)
+        if diff is not None:
+            diffs.append(diff)
     return diffs
 
 
@@ -100,6 +99,12 @@ def _format_diff(diff: FileDiff) -> list[str]:
     Returns:
         Unified diff lines preserving line endings.
     """
+    if diff.binary:
+        return [
+            f"--- {diff.relative_path} (current)\n",
+            f"+++ {diff.relative_path} (expected)\n",
+            "Binary files differ\n",
+        ]
     lines = list(
         unified_diff(
             diff.current.splitlines(keepends=True),
@@ -114,6 +119,70 @@ def _format_diff(diff: FileDiff) -> list[str]:
         f"--- {diff.relative_path} (current)\n",
         f"+++ {diff.relative_path} (expected)\n",
     ]
+
+
+def _text_file_diff(cwd: Path, generated_file: GeneratedFile) -> FileDiff | None:
+    """Build a diff for one generated text file.
+
+    Args:
+        cwd: Project directory used as display root.
+        generated_file: Expected generated text file.
+
+    Returns:
+        File diff, or None when current content matches.
+    """
+    current_exists = generated_file.path.exists()
+    current = _read_existing_text(generated_file.path)
+    if current_exists and current == generated_file.content:
+        return None
+    return FileDiff(
+        generated_file.path,
+        _display_path(cwd, generated_file.path),
+        current_exists,
+        current,
+        generated_file.content,
+    )
+
+
+def _copy_file_diff(cwd: Path, copy_file: SkillCopyFile) -> FileDiff | None:
+    """Build a diff for one managed skill-copy file.
+
+    Args:
+        cwd: Project directory used as display root.
+        copy_file: Expected managed copy file.
+
+    Returns:
+        File diff, or None when current bytes match.
+    """
+    current_exists = copy_file.path.exists()
+    current = copy_file.path.read_bytes() if current_exists else b""
+    if current_exists and current == copy_file.content:
+        return None
+    current_text, current_binary = _decode_bytes(current)
+    expected_text, expected_binary = _decode_bytes(copy_file.content)
+    return FileDiff(
+        copy_file.path,
+        _display_path(cwd, copy_file.path),
+        current_exists,
+        current_text,
+        expected_text,
+        current_binary or expected_binary,
+    )
+
+
+def _decode_bytes(content: bytes) -> tuple[str, bool]:
+    """Decode file bytes for diff display.
+
+    Args:
+        content: File bytes.
+
+    Returns:
+        Text content and whether decoding failed.
+    """
+    try:
+        return content.decode("utf-8"), False
+    except UnicodeDecodeError:
+        return "", True
 
 
 def _read_existing_text(path: Path) -> str:
