@@ -1,22 +1,23 @@
 # codexmgr
 
-`codexmgr` manages project-local Codex configuration from reusable templates.
-It keeps hand-written project instructions in `AGENTS.md` and generated Codex
-configuration in `.codex/` synchronized from a small declarative
-`.codex/codexmgr.toml` file. It can also keep project-local MCP server
-overrides in sync without editing the user Codex config.
+`codexmgr` centralizes reusable Codex project setup. It lets you keep shared
+`AGENTS.md` snippets, skills, hooks, custom agents, rule files, packages, and
+safe MCP overrides in one manager home, then sync the selected pieces into each
+project from a small `.codex/codexmgr.toml` file.
 
-The tool is intentionally narrow:
+I built it because I use Codex in many different projects and got tired of
+manually assembling `AGENTS.md` every time. When I improved a rule in one
+project, I also had to remember to copy that update into every other project.
+This workflow makes agent rules and snippets reusable, centralized, and still
+project-specific where needed.
 
-- compose reusable AGENTS.md instruction fragments
-- enable or disable Codex skills per project
-- enable or disable reusable Codex hook bundles per project
-- enable or disable project custom agents from reusable TOML files
-- enable or disable reusable rule files copied into project-local `.rules/`
-- enable or disable packaged sets of AGENTS.md, agent, skill, hook, and rule settings
-- enable, disable, inspect, and update safe project-local MCP overrides
-- use an interactive terminal UI for common project management tasks
-- write reproducible lock data for the resolved project configuration
+Use `codexmgr` when you want to:
+
+- compose project `AGENTS.md` files from reusable instruction fragments
+- keep shared rules, skills, hooks, and custom agents available across projects
+- bundle common Codex setup as packages and profiles
+- manage project-local MCP enablement without editing the user Codex config
+- check whether generated Codex files are in sync
 - run `codex` with project `.codex/config.toml` values translated into `-c`
   overrides
 
@@ -26,7 +27,7 @@ The tool is intentionally narrow:
 - `uv` for local development
 - `codex` on `PATH` only when using `codexmgr codex ...`
 
-## Installation
+## Install
 
 From a checkout:
 
@@ -43,15 +44,16 @@ uv tool install .
 
 ## Quick Start
 
-Create the project `.codex/` directory:
+In a project that should use shared Codex configuration, initialize
+`codexmgr`:
 
 ```bash
 codexmgr setup
 ```
 
-Create or install a named AGENTS.md template under
+Create or install an `AGENTS.md` snippet under
 `$CODEXMGR_HOME/agentsmd/<name>.toml`. If `CODEXMGR_HOME` is unset,
-`~/.codexmgr` is used.
+`codexmgr` uses `~/.codexmgr`.
 
 ```toml
 [coding]
@@ -64,7 +66,7 @@ text = """
 text = "Prefer lasting regression tests over temporary scripts."
 ```
 
-Add the template to the current project:
+Add the snippet to the current project:
 
 ```bash
 codexmgr agentsmd add coding
@@ -72,6 +74,13 @@ codexmgr agentsmd add coding
 
 This updates `.codex/codexmgr.toml`, runs `apply`, writes
 `.codex/codexmgr.lock`, and refreshes the managed block in `AGENTS.md`.
+
+To preview or validate a snippet before adding it:
+
+```bash
+codexmgr agentsmd show coding
+codexmgr agentsmd validate coding
+```
 
 ## Managed Files
 
