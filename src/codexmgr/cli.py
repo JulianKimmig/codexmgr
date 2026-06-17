@@ -131,6 +131,7 @@ def _dispatch(
         return run_codexmgr_home_action(codexmgr_home, args.cd_action, stdout)
 
     if args.command == "codex":
+        apply_project_config(cwd, codex_home, codexmgr_home)
         return run_codex(cwd, args.codex_args)
 
     if args.command == "agentsmd" and args.agentsmd_command == "list":
