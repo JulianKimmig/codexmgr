@@ -527,9 +527,3 @@ uv build
 The package is typed (`py.typed`) and the test suite covers CLI behavior,
 template rendering, TOML writing, skill resolution, generated-file sync checks,
 Codex command generation, home-directory resolution, and package metadata.
-
-## Release Process
-
-The GitHub workflow runs the test matrix on Python 3.11, 3.12, and 3.13 across
-Linux, Windows, and macOS. The publish workflow builds and publishes to PyPI
-when the version in `pyproject.toml` differs from the latest published version.
