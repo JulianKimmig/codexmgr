@@ -9,10 +9,16 @@ from textual.css.query import NoMatches
 from textual.widgets import Footer, Header, Label, SelectionList, Static, Tree
 
 from ..core.errors import CommandError
+from .focus import (
+    highlighted_list_item,
+    highlighted_rule_item,
+    restore_rule_tree_focus,
+    restore_selection_list_focus,
+)
 from .models import ManagedItem
 from .panels import detail_text, status_text, title_text
 from .rendering import APP_CSS, NAV_LABELS, TUI_BINDINGS, selection_for_item
-from .rule_tree import populate_rule_tree, rule_item_from_tree_node
+from .rule_tree import populate_rule_tree
 from .sections import cycle_section_state, items_for_section, set_section_selected
 from .state import StagedConfig, load_staged_config, save_staged_config
 
@@ -137,18 +143,25 @@ class CodexMgrTui(App[int]):
         Returns:
             None.
         """
-        if self.section == "rules":
-            item = self._highlighted_rule_item()
-        else:
-            item = self._highlighted_item()
+        try:
+            if self.section == "rules":
+                item = highlighted_rule_item(self.query_one("#rule-tree", Tree))
+            else:
+                item = highlighted_list_item(
+                    self.query_one("#items", SelectionList),
+                    self._rendered_items,
+                )
+        except NoMatches:
+            return
         if item is None:
             return
+        selection_value = item.selection_value()
         try:
             cycle_section_state(self.staged, self.section, item)
             self._status = "Staged changes pending" if self.staged.dirty() else "Ready"
         except CommandError as exc:
             self._status = f"ERROR {exc}"
-        self._refresh_view()
+        self._refresh_view(selection_value)
 
     @on(SelectionList.SelectedChanged, "#items")
     def _selection_changed(self, event: SelectionList.SelectedChanged[str]) -> None:
@@ -177,8 +190,11 @@ class CodexMgrTui(App[int]):
             return
         self._refresh_status()
 
-    def _refresh_view(self) -> None:
+    def _refresh_view(self, selection_value: str | None = None) -> None:
         """Refresh title, selectable list, detail text, and status.
+
+        Args:
+            selection_value: Optional stable item value to keep highlighted.
 
         Returns:
             None.
@@ -194,7 +210,11 @@ class CodexMgrTui(App[int]):
             except NoMatches:
                 return
             title.update(title_text(self.section, dirty=self.staged.dirty()))
-            rendered_items, warning = self._refresh_resource_widget(items, rule_tree)
+            rendered_items, warning = self._refresh_resource_widget(
+                items,
+                rule_tree,
+                selection_value,
+            )
             detail.update(
                 detail_text(
                     self.section,
@@ -212,12 +232,14 @@ class CodexMgrTui(App[int]):
         self,
         items: SelectionList[str],
         rule_tree: Tree[ManagedItem | None],
+        selection_value: str | None,
     ) -> tuple[list[ManagedItem], str]:
         """Refresh the active resource widget.
 
         Args:
             items: Selection list widget used by non-rule sections.
             rule_tree: Tree widget used by the rules section.
+            selection_value: Optional stable item value to keep highlighted.
 
         Returns:
             Rendered items and optional warning text.
@@ -228,6 +250,7 @@ class CodexMgrTui(App[int]):
             rendered_items = populate_rule_tree(rule_tree, self.staged)
             self._rendered_items = rendered_items
             self._selected_values = set()
+            restore_rule_tree_focus(rule_tree, selection_value)
             rule_tree.focus()
             return rendered_items, ""
         rule_tree.display = False
@@ -236,8 +259,7 @@ class CodexMgrTui(App[int]):
         self._rendered_items = rendered_items
         items.clear_options()
         items.add_options(selection_for_item(item) for item in rendered_items)
-        if rendered_items:
-            items.highlighted = 0
+        restore_selection_list_focus(items, selection_value)
         self._selected_values = {
             item.selection_value()
             for item in rendered_items
@@ -245,40 +267,6 @@ class CodexMgrTui(App[int]):
         }
         items.focus()
         return rendered_items, warning
-
-    def _highlighted_item(self) -> ManagedItem | None:
-        """Return the highlighted item from the selection list.
-
-        Returns:
-            Highlighted display item, or None when no row is highlighted.
-        """
-        try:
-            items = self.query_one("#items", SelectionList)
-        except NoMatches:
-            return None
-        option = items.highlighted_option
-        if option is None:
-            return None
-        return next(
-            (
-                item
-                for item in self._rendered_items
-                if item.selection_value() == option.value
-            ),
-            None,
-        )
-
-    def _highlighted_rule_item(self) -> ManagedItem | None:
-        """Return the highlighted selectable rule tree item.
-
-        Returns:
-            Highlighted rule item, or None for virtual folder nodes.
-        """
-        try:
-            rule_tree = self.query_one("#rule-tree", Tree)
-        except NoMatches:
-            return None
-        return rule_item_from_tree_node(rule_tree.cursor_node)
 
     def _refresh_status(self) -> None:
         """Refresh low-cost dirty-state and status widgets only.
