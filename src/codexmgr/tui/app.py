@@ -2,17 +2,17 @@
 
 from pathlib import Path
 
-from rich.text import Text
 from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
-from textual.widgets import Footer, Header, Label, SelectionList, Static
+from textual.widgets import Footer, Header, Label, SelectionList, Static, Tree
 
 from ..core.errors import CommandError
-from .diff import staged_diff_lines
 from .models import ManagedItem
-from .rendering import APP_CSS, NAV_LABELS, SECTION_TITLES, TUI_BINDINGS, selection_for_item
+from .panels import detail_text, status_text, title_text
+from .rendering import APP_CSS, NAV_LABELS, TUI_BINDINGS, selection_for_item
+from .rule_tree import populate_rule_tree, rule_item_from_tree_node
 from .sections import cycle_section_state, items_for_section, set_section_selected
 from .state import StagedConfig, load_staged_config, save_staged_config
 
@@ -77,6 +77,7 @@ class CodexMgrTui(App[int]):
             with Vertical(id="main"):
                 yield Static(id="title")
                 yield SelectionList[str](id="items")
+                yield Tree("Rules", id="rule-tree")
                 yield Static(id="detail")
                 yield Static(id="status")
         yield Footer()
@@ -136,11 +137,10 @@ class CodexMgrTui(App[int]):
         Returns:
             None.
         """
-        try:
-            items = self.query_one("#items", SelectionList)
-        except NoMatches:
-            return
-        item = self._highlighted_item(items)
+        if self.section == "rules":
+            item = self._highlighted_rule_item()
+        else:
+            item = self._highlighted_item()
         if item is None:
             return
         try:
@@ -158,6 +158,8 @@ class CodexMgrTui(App[int]):
             event: Selection-list change event.
         """
         if self._refreshing:
+            return
+        if self.section == "rules":
             return
         selected = set(event.selection_list.selected)
         enabled = selected - self._selected_values
@@ -186,33 +188,74 @@ class CodexMgrTui(App[int]):
             try:
                 title = self.query_one("#title", Static)
                 items = self.query_one("#items", SelectionList)
+                rule_tree = self.query_one("#rule-tree", Tree)
                 detail = self.query_one("#detail", Static)
                 status = self.query_one("#status", Static)
             except NoMatches:
                 return
-            title.update(self._title_text())
-            rendered_items, warning = items_for_section(self.staged, self.section)
-            self._rendered_items = rendered_items
-            items.clear_options()
-            items.add_options(selection_for_item(item) for item in rendered_items)
-            if rendered_items:
-                items.highlighted = 0
-            self._selected_values = {item.selection_value() for item in rendered_items if item.state == "enabled"}
-            detail.update(self._detail_text(rendered_items, warning))
-            status.update(self._status_text())
-            items.focus()
+            title.update(title_text(self.section, dirty=self.staged.dirty()))
+            rendered_items, warning = self._refresh_resource_widget(items, rule_tree)
+            detail.update(
+                detail_text(
+                    self.section,
+                    rendered_items,
+                    warning,
+                    self.staged,
+                    show_diff=self.show_diff,
+                ),
+            )
+            status.update(status_text(self._status))
         finally:
             self._refreshing = False
 
-    def _highlighted_item(self, items: SelectionList[str]) -> ManagedItem | None:
-        """Return the display item for the highlighted row.
+    def _refresh_resource_widget(
+        self,
+        items: SelectionList[str],
+        rule_tree: Tree[ManagedItem | None],
+    ) -> tuple[list[ManagedItem], str]:
+        """Refresh the active resource widget.
 
         Args:
-            items: Selection list widget.
+            items: Selection list widget used by non-rule sections.
+            rule_tree: Tree widget used by the rules section.
+
+        Returns:
+            Rendered items and optional warning text.
+        """
+        if self.section == "rules":
+            items.display = False
+            rule_tree.display = True
+            rendered_items = populate_rule_tree(rule_tree, self.staged)
+            self._rendered_items = rendered_items
+            self._selected_values = set()
+            rule_tree.focus()
+            return rendered_items, ""
+        rule_tree.display = False
+        items.display = True
+        rendered_items, warning = items_for_section(self.staged, self.section)
+        self._rendered_items = rendered_items
+        items.clear_options()
+        items.add_options(selection_for_item(item) for item in rendered_items)
+        if rendered_items:
+            items.highlighted = 0
+        self._selected_values = {
+            item.selection_value()
+            for item in rendered_items
+            if item.state == "enabled"
+        }
+        items.focus()
+        return rendered_items, warning
+
+    def _highlighted_item(self) -> ManagedItem | None:
+        """Return the highlighted item from the selection list.
 
         Returns:
             Highlighted display item, or None when no row is highlighted.
         """
+        try:
+            items = self.query_one("#items", SelectionList)
+        except NoMatches:
+            return None
         option = items.highlighted_option
         if option is None:
             return None
@@ -225,6 +268,18 @@ class CodexMgrTui(App[int]):
             None,
         )
 
+    def _highlighted_rule_item(self) -> ManagedItem | None:
+        """Return the highlighted selectable rule tree item.
+
+        Returns:
+            Highlighted rule item, or None for virtual folder nodes.
+        """
+        try:
+            rule_tree = self.query_one("#rule-tree", Tree)
+        except NoMatches:
+            return None
+        return rule_item_from_tree_node(rule_tree.cursor_node)
+
     def _refresh_status(self) -> None:
         """Refresh low-cost dirty-state and status widgets only.
 
@@ -236,59 +291,5 @@ class CodexMgrTui(App[int]):
             status = self.query_one("#status", Static)
         except NoMatches:
             return
-        title.update(self._title_text())
-        status.update(self._status_text())
-
-    def _title_text(self) -> Text:
-        """Build the section title.
-
-        Returns:
-            Rich text title.
-        """
-        title = Text(SECTION_TITLES[self.section], style="bold white")
-        if self.staged.dirty():
-            title.append("  dirty", style="yellow")
-        return title
-
-    def _detail_text(self, items: list[ManagedItem], warning: str) -> Text:
-        """Build detail panel content.
-
-        Args:
-            items: Items currently displayed.
-            warning: Optional warning from item discovery.
-
-        Returns:
-            Rich text detail content.
-        """
-        if self.section == "dashboard":
-            return Text(self._dashboard_detail())
-        lines = [f"{len(items)} items"]
-        if warning:
-            lines.append(f"WARN {warning}")
-        for item in items:
-            if item.missing:
-                lines.append(f"missing {item.name} {item.detail}".rstrip())
-        return Text("\n".join(lines) if lines else "No items")
-
-    def _dashboard_detail(self) -> str:
-        """Build dashboard detail text.
-
-        Returns:
-            Dashboard detail text.
-        """
-        diff_text = staged_diff_lines(self.staged, show_diff=self.show_diff)
-        return (
-            f"Project: {self.cwd}\n"
-            f"CODEX_HOME: {self.codex_home}\n"
-            f"CODEXMGR_HOME: {self.codexmgr_home}\n"
-            f"Sync: {diff_text}"
-        )
-
-    def _status_text(self) -> Text:
-        """Build the footer status line.
-
-        Returns:
-            Rich text status.
-        """
-        style = "red" if self._status.startswith("ERROR ") else "green"
-        return Text(self._status, style=style)
+        title.update(title_text(self.section, dirty=self.staged.dirty()))
+        status.update(status_text(self._status))

@@ -34,7 +34,9 @@ def rule_list_lines(cwd: Path, codexmgr_home: Path) -> list[str]:
     Returns:
         Sorted rule list lines.
     """
-    return [_format_item(item) for item in list_rule_items(cwd, codexmgr_home)]
+    from .tree import format_rule_tree_lines, rule_tree_nodes
+
+    return format_rule_tree_lines(rule_tree_nodes(cwd, codexmgr_home))
 
 
 def list_rule_items(cwd: Path, codexmgr_home: Path) -> list[RuleListItem]:
@@ -48,6 +50,24 @@ def list_rule_items(cwd: Path, codexmgr_home: Path) -> list[RuleListItem]:
         Sorted display items.
     """
     enabled, disabled = configured_rule_lists(cwd)
+    return rule_list_items_for_state(enabled, disabled, codexmgr_home)
+
+
+def rule_list_items_for_state(
+    enabled: list[str],
+    disabled: list[str],
+    codexmgr_home: Path,
+) -> list[RuleListItem]:
+    """List available and configured rule refs for explicit rule state.
+
+    Args:
+        enabled: Enabled rule refs from a project or staged config.
+        disabled: Disabled rule refs from a project or staged config.
+        codexmgr_home: Codexmgr home containing source rules.
+
+    Returns:
+        Sorted display items.
+    """
     available = set(available_rule_refs(codexmgr_home))
     names = sorted(available | set(enabled) | set(disabled))
     return [_rule_item(name, enabled, disabled, available, codexmgr_home) for name in names]
@@ -121,15 +141,3 @@ def _is_missing(name: str, codexmgr_home: Path) -> bool:
     """
     return canonical_rule_ref_if_exists(name, codexmgr_home) is None
 
-
-def _format_item(item: RuleListItem) -> str:
-    """Format one rule list item.
-
-    Args:
-        item: Rule display item.
-
-    Returns:
-        Human-readable CLI line.
-    """
-    suffix = " (missing)" if item.missing else ""
-    return f"{item.state} {item.name}{suffix}"

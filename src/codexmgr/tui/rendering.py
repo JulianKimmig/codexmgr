@@ -32,6 +32,11 @@ Screen {
     border: solid #3a4658;
     padding: 1;
 }
+#rule-tree {
+    height: 1fr;
+    border: solid #3a4658;
+    padding: 1;
+}
 #detail {
     height: 10;
     border: solid #3a4658;

@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from codexmgr.rules.tree import rule_tree_nodes
+
 
 def test_rules_list_marks_nested_available_enabled_disabled_and_missing(
     workspace,
@@ -31,10 +33,64 @@ def test_rules_list_marks_nested_available_enabled_disabled_and_missing(
         "disabled legacy.md (missing)\n"
         "enabled missing.md (missing)\n"
         "enabled react/\n"
-        "available react/components.md\n"
-        "disabled react/materials/\n"
-        "available react/materials/colors.md\n"
+        "  available components.md\n"
+        "  disabled materials/\n"
+        "    available colors.md\n"
     )
+
+
+def test_rules_list_groups_nested_missing_refs_under_virtual_folders(
+    workspace,
+    run_cli_with_homes,
+):
+    """rules list groups missing nested refs without inventing folder state."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    (project / ".codex" / "codexmgr.toml").write_text(
+        '[rules]\nenabled = ["legacy/deep.md"]\ndisabled = ["missing/folder/"]\n',
+        encoding="utf-8",
+    )
+
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["rules", "list"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+
+    assert exit_code == 0
+    assert stderr == ""
+    assert stdout == (
+        "legacy/\n"
+        "  enabled deep.md (missing)\n"
+        "missing/\n"
+        "  disabled folder/ (missing)\n"
+    )
+
+
+def test_rule_tree_groups_nested_missing_refs_under_virtual_folders(
+    workspace,
+    run_cli_with_homes,
+):
+    """The shared rule tree models virtual parents for nested missing refs."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    (project / ".codex" / "codexmgr.toml").write_text(
+        '[rules]\nenabled = ["legacy/deep.md"]\n',
+        encoding="utf-8",
+    )
+
+    nodes = rule_tree_nodes(project, codexmgr_home)
+
+    assert len(nodes) == 1
+    assert nodes[0].path == "legacy/"
+    assert nodes[0].label == "legacy/"
+    assert nodes[0].item is None
+    assert [(node.label, node.item.name, node.item.state, node.item.missing) for node in nodes[0].children] == [
+        ("deep.md", "legacy/deep.md", "enabled", True),
+    ]
 
 
 def test_rules_enable_folder_recursively_copies_and_locks_files(

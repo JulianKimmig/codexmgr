@@ -209,6 +209,9 @@ Rule refs resolve under `$CODEXMGR_HOME/rules/` and use POSIX-style relative
 paths. Folder refs have a trailing slash and copy regular files recursively into
 `.rules/` while preserving relative paths.
 
+Rule listings are grouped by folder. `codexmgr rules list` prints an indented
+tree, while the TUI Rules screen shows the same refs in a collapsible tree.
+
 File rule refs copy one file. Extensionless refs prefer an existing `<ref>.md`.
 Enabled refs expand first, then disabled file or folder refs remove entries from
 that candidate set.
@@ -269,7 +272,8 @@ These commands run `apply` automatically unless `--no-sync` is passed.
 
 `codexmgr tui` opens a Textual-based terminal UI for project-local
 configuration. It shows `AGENTS.md` snippets, skills, hooks, custom agents,
-rules, packages, and MCP server enable overrides in selectable lists.
+packages, and MCP server enable overrides in selectable lists. Rules are shown
+in a collapsible folder tree.
 
 Changes are staged in memory while you navigate. Press `s` to save; the save
 writes `.codex/codexmgr.toml` once and runs `apply` once unless `--no-sync` was
@@ -277,7 +281,9 @@ used.
 
 For resources with explicit enable and disable lists, `space` cycles the
 highlighted row through available, enabled, and disabled states. Package
-profiles appear as separate selectable rows under their package.
+profiles appear as separate selectable rows under their package. In the Rules
+tree, cycling a file or folder node updates the full canonical rule ref behind
+that basename label.
 
 ```bash
 codexmgr tui
@@ -398,8 +404,9 @@ codexmgr rules enable [--no-sync] <rule-ref> [...]
 codexmgr rules disable [--no-sync] <rule-ref> [...]
 ```
 
-`skill list`, `agents list`, `hooks list`, and `rules list` print available
-resources and mark configured entries as enabled, disabled, or missing.
+`skill list`, `agents list`, and `hooks list` print available resources and
+mark configured entries as enabled, disabled, or missing. `rules list` prints
+the same state in an indented folder hierarchy.
 
 Enable commands validate manager-home sources when the source type must already
 exist. Enable and disable lists stay mutually exclusive, and repeated commands

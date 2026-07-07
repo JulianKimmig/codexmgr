@@ -1,7 +1,8 @@
 """Build reusable-rule display items for the TUI."""
 
 from ..rules.config import rule_lists
-from ..rules.sources import available_rule_refs, canonical_rule_ref_if_exists
+from ..rules.listing import RuleListItem, rule_list_items_for_state
+from ..rules.tree import RuleTreeNode, build_rule_tree
 from .models import ManagedItem
 from .state import StagedConfig
 
@@ -15,44 +16,41 @@ def rule_items(staged: StagedConfig) -> list[ManagedItem]:
     Returns:
         Sorted display items.
     """
-    enabled, disabled = rule_lists(staged.config)
-    available = set(available_rule_refs(staged.codexmgr_home))
-    names = sorted(available | set(enabled) | set(disabled))
-    return [
-        ManagedItem(name, _state(name, enabled, disabled), _missing_rule(name, staged))
-        for name in names
-    ]
+    return [_managed_item(item) for item in _staged_rule_items(staged)]
 
 
-def _state(name: str, enabled: list[str], disabled: list[str]) -> str:
-    """Return enabled, disabled, or available for a rule item.
+def rule_tree_items(staged: StagedConfig) -> list[RuleTreeNode]:
+    """Return staged reusable rule items as hierarchical nodes.
 
     Args:
-        name: Rule reference.
-        enabled: Enabled rule refs.
-        disabled: Disabled rule refs.
-
-    Returns:
-        Display state.
-    """
-    if name in enabled:
-        return "enabled"
-    if name in disabled:
-        return "disabled"
-    return "available"
-
-
-def _missing_rule(name: str, staged: StagedConfig) -> bool:
-    """Return whether a configured rule ref is missing.
-
-    Args:
-        name: Rule reference.
         staged: Staged project configuration.
 
     Returns:
-        True when a configured rule ref does not resolve.
+        Root-level rule tree nodes.
+    """
+    return build_rule_tree(_staged_rule_items(staged))
+
+
+def _staged_rule_items(staged: StagedConfig) -> list[RuleListItem]:
+    """Return flat rule items for the staged config.
+
+    Args:
+        staged: Staged project configuration.
+
+    Returns:
+        Sorted rule list items.
     """
     enabled, disabled = rule_lists(staged.config)
-    if name not in enabled and name not in disabled:
-        return False
-    return canonical_rule_ref_if_exists(name, staged.codexmgr_home) is None
+    return rule_list_items_for_state(enabled, disabled, staged.codexmgr_home)
+
+
+def _managed_item(item: RuleListItem) -> ManagedItem:
+    """Convert a reusable-rule item to a TUI item.
+
+    Args:
+        item: Rule item from the shared listing model.
+
+    Returns:
+        TUI display item with the canonical rule ref as its value.
+    """
+    return ManagedItem(item.name, item.state, item.missing, value=item.name)
