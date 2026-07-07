@@ -71,6 +71,44 @@ async def test_tui_cycle_keeps_rule_tree_highlighted_item(
     assert item.selection_value() == "beta.md"
 
 
+@pytest.mark.asyncio
+async def test_tui_cycle_keeps_nested_rule_tree_highlighted_item(
+    workspace,
+    run_cli_with_homes,
+):
+    """Cycling a nested rule tree node keeps focus on the same rule."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_rule(codexmgr_home, "react/components.md")
+    _write_rule(codexmgr_home, "react/materials/colors.md")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    app = CodexMgrTui(
+        cwd=project,
+        codex_home=codex_home,
+        codexmgr_home=codexmgr_home,
+        no_sync=True,
+        show_diff=False,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("6")
+        await pilot.pause()
+        tree = app.query_one("#rule-tree", Tree)
+        react_node = tree.root.children[0]
+        materials_node = react_node.children[1]
+        colors_node = materials_node.children[0]
+        react_node.expand()
+        materials_node.expand()
+        await pilot.pause()
+        tree.move_cursor_to_line(colors_node.line)
+        await pilot.press("space")
+        await pilot.pause()
+        item = tree.cursor_node.data
+
+    assert isinstance(item, ManagedItem)
+    assert item.selection_value() == "react/materials/colors.md"
+
+
 def _write_skill(home: Path, name: str) -> Path:
     """Create a reusable skill in a codexmgr home directory.
 

@@ -30,8 +30,6 @@ def populate_rule_tree(
     tree.root.expand()
     for node in rule_tree_items(staged):
         _add_tree_node(tree.root, node, rendered)
-    if tree.root.children:
-        tree.select_node(tree.root.children[0])
     return rendered
 
 

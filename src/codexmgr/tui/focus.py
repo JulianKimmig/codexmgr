@@ -87,10 +87,9 @@ def restore_rule_tree_focus(
         node = _find_tree_node(tree.root, selection_value)
         if node is not None:
             _expand_ancestors(node)
-            tree.select_node(node)
-            return
-    if tree.root.children:
-        tree.select_node(tree.root.children[0])
+            if _move_tree_cursor_to_node(tree, node):
+                return
+    _move_tree_cursor_to_first_line(tree)
 
 
 def _find_tree_node(
@@ -113,6 +112,58 @@ def _find_tree_node(
         found = _find_tree_node(child, selection_value)
         if found is not None:
             return found
+    return None
+
+
+def _move_tree_cursor_to_node(
+    tree: Tree[ManagedItem | None],
+    node: TreeNode[ManagedItem | None],
+) -> bool:
+    """Move a tree cursor to a node using its current visible line.
+
+    Args:
+        tree: Rules tree widget containing the node.
+        node: Tree node that should receive cursor focus.
+
+    Returns:
+        True when the cursor was moved to a visible line.
+    """
+    line = _visible_line_for_node(tree, node)
+    if line is None:
+        return False
+    tree.move_cursor_to_line(line)
+    return True
+
+
+def _move_tree_cursor_to_first_line(tree: Tree[ManagedItem | None]) -> None:
+    """Move a tree cursor to the first visible line when one exists.
+
+    Args:
+        tree: Rules tree widget that should receive fallback focus.
+
+    Returns:
+        None.
+    """
+    if tree._tree_lines:
+        tree.move_cursor_to_line(0)
+
+
+def _visible_line_for_node(
+    tree: Tree[ManagedItem | None],
+    node: TreeNode[ManagedItem | None],
+) -> int | None:
+    """Return the current visible line for a tree node.
+
+    Args:
+        tree: Rules tree widget containing the node.
+        node: Tree node to locate in the visible line cache.
+
+    Returns:
+        Current visible line number, or None when the node is hidden.
+    """
+    for line_number, line in enumerate(tree._tree_lines):
+        if line.node is node:
+            return line_number
     return None
 
 
