@@ -10,6 +10,7 @@ from ..core.paths import resolve_template
 from ..core.toml_io import ensure_toml_table
 from ..hooks.config import hook_lists
 from ..hooks.sources import require_hook_source
+from ..mcp.project import mcp_source_names
 from ..packages.config import PackageEntries
 from ..project.config import agents_md_sources
 from ..rules.config import rule_lists
@@ -168,3 +169,16 @@ def remove_mcp_server(config: MutableMapping[str, Any], server_id: str) -> None:
     if not isinstance(servers, MutableMapping):
         return
     servers.pop(server_id, None)
+
+
+def remove_mcp_source(config: MutableMapping[str, Any], name: str) -> None:
+    """Remove a staged reusable MCP source selection.
+
+    Args:
+        config: Staged codexmgr.toml document.
+        name: MCP source name to remove from the enabled list.
+    """
+    mcp = config.get("mcp")
+    if not isinstance(mcp, MutableMapping):
+        return
+    mcp["enabled"] = [source for source in mcp_source_names(config) if source != name]

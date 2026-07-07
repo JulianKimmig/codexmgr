@@ -1,4 +1,4 @@
-"""Apply project MCP overrides to generated Codex config and lock data."""
+"""Apply project MCP server tables to generated Codex config and lock data."""
 
 from collections.abc import Mapping, MutableMapping
 from typing import Any
@@ -9,14 +9,14 @@ from ..core.toml_io import ensure_toml_table
 
 def apply_mcp_overrides(
     codex_config: MutableMapping[str, Any],
-    overrides: Mapping[str, Mapping[str, Any]],
+    servers: Mapping[str, Mapping[str, Any]],
     previous_lock: Mapping[str, Any],
 ) -> None:
-    """Apply MCP overrides to a local Codex config document.
+    """Apply MCP server tables to a local Codex config document.
 
     Args:
         codex_config: Mutable .codex/config.toml document.
-        overrides: Current MCP overrides.
+        servers: Current generated MCP server tables.
         previous_lock: Previous codexmgr lock data.
     """
     mcp_servers = ensure_toml_table(
@@ -25,7 +25,7 @@ def apply_mcp_overrides(
         ".codex/config.toml [mcp_servers] must be a table",
     )
     _remove_previous_fields(mcp_servers, previous_lock)
-    for server_id, fields in overrides.items():
+    for server_id, fields in servers.items():
         target = ensure_toml_table(
             mcp_servers,
             server_id,
@@ -34,16 +34,23 @@ def apply_mcp_overrides(
         target.update(known_fields(fields))
 
 
-def mcp_lock_data(overrides: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
-    """Build lock data for MCP overrides.
+def mcp_lock_data(
+    enabled_sources: list[str],
+    servers: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Build lock data for generated MCP state.
 
     Args:
-        overrides: Current MCP overrides.
+        enabled_sources: Reusable MCP source names enabled by the project.
+        servers: Current generated MCP server tables.
 
     Returns:
         Lockfile MCP data.
     """
-    return {"servers": {key: known_fields(value) for key, value in overrides.items()}}
+    return {
+        "enabled": list(enabled_sources),
+        "servers": {key: known_fields(value) for key, value in servers.items()},
+    }
 
 
 def _remove_previous_fields(

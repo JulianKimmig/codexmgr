@@ -13,6 +13,7 @@ from ..custom_agents.resolution import AgentResolution
 from ..hooks.resolution import HookResolution, hook_lock_data, hooks_json_file
 from ..hooks.sources import project_hooks_json_path
 from ..mcp.apply import apply_mcp_overrides, mcp_lock_data
+from ..mcp.resolution import McpResolution
 from ..rules.resolution import RuleResolution, rule_lock_data
 from ..skills.copies import copy_lock_entries
 from ..skills.resolution import SkillResolution
@@ -22,7 +23,7 @@ def build_codex_config(
     cwd: Path,
     config: dict[str, Any],
     skill_entries: list[dict[str, Any]],
-    mcp_overrides: dict[str, dict[str, Any]],
+    mcp_resolution: McpResolution,
     previous_lock: dict[str, Any],
 ) -> dict[str, Any]:
     """Build generated project-local Codex config content.
@@ -31,7 +32,7 @@ def build_codex_config(
         cwd: Project directory whose .codex/config.toml should be updated.
         config: Parsed project codexmgr configuration.
         skill_entries: Resolved Codex skill configuration entries.
-        mcp_overrides: Resolved MCP server overrides.
+        mcp_resolution: Resolved MCP server configuration.
         previous_lock: Existing codexmgr lock data.
 
     Returns:
@@ -41,7 +42,7 @@ def build_codex_config(
     if "skills" in config:
         _set_skill_config(codex_config, skill_entries)
     if "mcp" in config:
-        apply_mcp_overrides(codex_config, mcp_overrides, previous_lock)
+        apply_mcp_overrides(codex_config, mcp_resolution.servers, previous_lock)
     return codex_config
 
 
@@ -86,7 +87,7 @@ def build_lock_data(
     skill_resolution: SkillResolution,
     hook_resolution: HookResolution,
     rule_resolution: RuleResolution,
-    mcp_overrides: dict[str, dict[str, Any]],
+    mcp_resolution: McpResolution,
 ) -> dict[str, Any]:
     """Build lockfile data for configured AGENTS.md, agents, skills, hooks, and MCP.
 
@@ -97,7 +98,7 @@ def build_lock_data(
         skill_resolution: Resolved skill configuration and copy state.
         hook_resolution: Resolved hook configuration and copy state.
         rule_resolution: Resolved reusable-rule copy state.
-        mcp_overrides: Resolved MCP server overrides.
+        mcp_resolution: Resolved MCP server configuration.
 
     Returns:
         Lockfile data to write, or an empty dictionary when nothing is configured.
@@ -123,7 +124,10 @@ def build_lock_data(
     if "rules" in config:
         lock_data["rules"] = rule_lock_data(rule_resolution)
     if "mcp" in config:
-        lock_data["mcp"] = mcp_lock_data(mcp_overrides)
+        lock_data["mcp"] = mcp_lock_data(
+            mcp_resolution.enabled_sources,
+            mcp_resolution.servers,
+        )
     return lock_data
 
 

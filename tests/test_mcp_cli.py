@@ -1,17 +1,26 @@
-"""CLI tests for project-local MCP override management."""
-
-from types import SimpleNamespace
+"""CLI tests for project-local MCP source and override management."""
 
 
-def test_mcp_enable_writes_project_config_and_applies_without_touching_user_config(
+def test_mcp_enable_writes_source_ref_and_applies_without_touching_user_config(
     workspace,
-    run_cli,
+    run_cli_with_homes,
     read_project_config,
     read_codex_config,
     read_lock,
 ):
-    """mcp enable records a project override and writes local Codex config."""
+    """mcp enable records a reusable source and writes local Codex config."""
     project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_mcp_source(
+        codexmgr_home,
+        "browsermcp",
+        '''
+[mcp_servers.browsermcp]
+command = "browsermcp"
+args = ["--port", "3000"]
+env_vars = ["BROWSERMCP_TOKEN"]
+''',
+    )
     user_config = codex_home / "config.toml"
     user_config.write_text(
         '''
@@ -22,108 +31,122 @@ enabled = false
         encoding="utf-8",
     )
     original_user_config = user_config.read_text(encoding="utf-8")
-    run_cli(["setup"], project, codex_home)
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
 
-    exit_code, stdout, stderr = run_cli(["mcp", "enable", "browsermcp"], project, codex_home)
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["mcp", "enable", "browsermcp"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
 
     assert exit_code == 0
     assert stderr == ""
     assert stdout == (
-        "Enabled MCP server override browsermcp\n"
+        "Enabled MCP source browsermcp\n"
         "Applied project Codex configuration\n"
     )
-    assert read_project_config(project)["mcp"]["servers"]["browsermcp"] == {
-        "enabled": True,
-    }
+    assert read_project_config(project)["mcp"]["enabled"] == ["browsermcp"]
     assert read_codex_config(project)["mcp_servers"]["browsermcp"] == {
-        "enabled": True,
+        "command": "browsermcp",
+        "args": ["--port", "3000"],
+        "env_vars": ["BROWSERMCP_TOKEN"],
     }
-    assert read_lock(project)["mcp"]["servers"]["browsermcp"] == {
-        "enabled": True,
-    }
+    assert read_lock(project)["mcp"]["enabled"] == ["browsermcp"]
+    assert read_lock(project)["mcp"]["servers"]["browsermcp"]["command"] == "browsermcp"
     assert user_config.read_text(encoding="utf-8") == original_user_config
 
 
-def test_mcp_disable_no_sync_updates_only_codexmgr_toml(
+def test_mcp_enable_no_sync_updates_only_codexmgr_toml(
     workspace,
-    run_cli,
+    run_cli_with_homes,
     read_project_config,
     read_codex_config,
 ):
-    """--no-sync keeps generated local Codex config untouched."""
+    """--no-sync keeps generated local Codex config untouched for sources."""
     project, codex_home = workspace
-    run_cli(["setup"], project, codex_home)
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_mcp_source(codexmgr_home, "browsermcp")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
 
-    exit_code, stdout, stderr = run_cli(
-        ["mcp", "disable", "--no-sync", "browsermcp"],
+    exit_code, stdout, stderr = run_cli_with_homes(
+        ["mcp", "enable", "--no-sync", "browsermcp"],
         project,
         codex_home,
+        codexmgr_home,
     )
 
     assert exit_code == 0
     assert stderr == ""
-    assert stdout == "Disabled MCP server override browsermcp\n"
-    assert read_project_config(project)["mcp"]["servers"]["browsermcp"] == {
-        "enabled": False,
-    }
+    assert stdout == "Enabled MCP source browsermcp\n"
+    assert read_project_config(project)["mcp"]["enabled"] == ["browsermcp"]
     assert read_codex_config(project) == {}
     assert not (codex_home / "config.toml").exists()
 
 
-def test_mcp_enable_and_disable_accept_multiple_servers(
+def test_mcp_enable_and_disable_accept_multiple_sources(
     workspace,
-    run_cli,
+    run_cli_with_homes,
     read_project_config,
     read_codex_config,
 ):
-    """mcp enable and disable accept multiple server ids per call."""
+    """mcp enable and disable accept multiple source names per call."""
     project, codex_home = workspace
-    run_cli(["setup"], project, codex_home)
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_mcp_source(codexmgr_home, "browsermcp")
+    _write_mcp_source(
+        codexmgr_home,
+        "context7",
+        '''
+[mcp_servers.context7]
+command = "context7"
+''',
+    )
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
 
-    enable_exit, enable_stdout, enable_stderr = run_cli(
+    enable_exit, enable_stdout, enable_stderr = run_cli_with_homes(
         ["mcp", "enable", "browsermcp", "context7"],
         project,
         codex_home,
+        codexmgr_home,
     )
 
     assert enable_exit == 0
     assert enable_stderr == ""
     assert enable_stdout == (
-        "Enabled MCP server override browsermcp\n"
-        "Enabled MCP server override context7\n"
+        "Enabled MCP source browsermcp\n"
+        "Enabled MCP source context7\n"
         "Applied project Codex configuration\n"
     )
-    assert read_project_config(project)["mcp"]["servers"] == {
-        "browsermcp": {"enabled": True},
-        "context7": {"enabled": True},
-    }
+    assert read_project_config(project)["mcp"]["enabled"] == ["browsermcp", "context7"]
     assert read_codex_config(project)["mcp_servers"] == {
-        "browsermcp": {"enabled": True},
-        "context7": {"enabled": True},
+        "browsermcp": {"command": "browsermcp"},
+        "context7": {"command": "context7"},
     }
 
-    disable_exit, disable_stdout, disable_stderr = run_cli(
+    disable_exit, disable_stdout, disable_stderr = run_cli_with_homes(
         ["mcp", "disable", "browsermcp", "context7"],
         project,
         codex_home,
+        codexmgr_home,
     )
 
     assert disable_exit == 0
     assert disable_stderr == ""
     assert disable_stdout == (
-        "Disabled MCP server override browsermcp\n"
-        "Disabled MCP server override context7\n"
+        "Disabled MCP source browsermcp\n"
+        "Disabled MCP source context7\n"
         "Applied project Codex configuration\n"
     )
-    assert read_project_config(project)["mcp"]["servers"] == {
-        "browsermcp": {"enabled": False},
-        "context7": {"enabled": False},
-    }
+    assert read_project_config(project)["mcp"]["enabled"] == []
+    assert "browsermcp" not in read_codex_config(project).get("mcp_servers", {})
+    assert "context7" not in read_codex_config(project).get("mcp_servers", {})
 
 
 def test_mcp_mutation_preserves_codexmgr_toml_comments(workspace, run_cli):
-    """MCP mutations preserve existing comments in project codexmgr.toml."""
+    """MCP server override mutations preserve existing comments."""
     project, codex_home = workspace
+    _write_mcp_source(codex_home, "browsermcp")
     run_cli(["setup"], project, codex_home)
     config_path = project / ".codex" / "codexmgr.toml"
     config_path.write_text(
@@ -148,12 +171,21 @@ disabled = []
     content = config_path.read_text(encoding="utf-8")
     assert "# project source config" in content
     assert "# keep this skills comment" in content
-    assert "[mcp.servers.browsermcp]" in content
+    assert "[mcp]" in content
+    assert 'enabled = ["browsermcp"]' in content
 
 
 def test_mcp_apply_preserves_existing_local_server_fields(workspace, run_cli, read_codex_config):
-    """Generated MCP overrides update fields without replacing manual local fields."""
+    """Generated MCP source fields update without replacing unrelated manual fields."""
     project, codex_home = workspace
+    _write_mcp_source(
+        codex_home,
+        "browsermcp",
+        '''
+[mcp_servers.browsermcp]
+enabled = true
+''',
+    )
     run_cli(["setup"], project, codex_home)
     (project / ".codex" / "config.toml").write_text(
         '''
@@ -181,8 +213,9 @@ enabled = false
 
 
 def test_mcp_commands_require_project_setup(workspace, run_cli):
-    """mcp mutations are project config changes and require .codex/."""
+    """mcp source mutations are project config changes and require .codex/."""
     project, codex_home = workspace
+    _write_mcp_source(codex_home, "browsermcp")
 
     exit_code, stdout, stderr = run_cli(["mcp", "enable", "browsermcp"], project, codex_home)
 
@@ -192,77 +225,116 @@ def test_mcp_commands_require_project_setup(workspace, run_cli):
     assert not (codex_home / "config.toml").exists()
 
 
-def test_mcp_list_merges_codex_servers_with_project_overrides(workspace, run_cli, monkeypatch):
-    """mcp list shows available Codex servers plus local override state."""
+def test_mcp_enable_rejects_missing_source_without_touching_project_config(
+    workspace,
+    run_cli,
+    read_project_config,
+):
+    """mcp enable validates reusable sources before writing project config."""
     project, codex_home = workspace
-    captured = {}
-
-    def fake_run(command, cwd, capture_output, text):
-        captured["command"] = command
-        captured["cwd"] = cwd
-        captured["capture_output"] = capture_output
-        captured["text"] = text
-        return SimpleNamespace(
-            returncode=0,
-            stdout='''
-[
-  {"name": "browsermcp", "enabled": true},
-  {"name": "context7", "enabled": false}
-]
-''',
-            stderr="",
-        )
-
-    monkeypatch.setattr("codexmgr.mcp.discovery.subprocess.run", fake_run)
     run_cli(["setup"], project, codex_home)
-    run_cli(["mcp", "disable", "--no-sync", "browsermcp"], project, codex_home)
-    run_cli(["mcp", "set-token-env", "--no-sync", "browsermcp", "BROWSERMCP_TOKEN"], project, codex_home)
+    original_config = read_project_config(project)
+
+    exit_code, stdout, stderr = run_cli(["mcp", "enable", "missing"], project, codex_home)
+
+    assert exit_code == 1
+    assert stdout == ""
+    assert "MCP source not found" in stderr
+    assert read_project_config(project) == original_config
+    assert not (codex_home / "config.toml").exists()
+
+
+def test_mcp_enable_rejects_duplicate_server_ids_without_writing(
+    workspace,
+    run_cli,
+    read_project_config,
+):
+    """Enabled reusable MCP sources cannot declare the same server id."""
+    project, codex_home = workspace
+    _write_mcp_source(
+        codex_home,
+        "one",
+        '''
+[mcp_servers.shared]
+command = "one"
+''',
+    )
+    _write_mcp_source(
+        codex_home,
+        "two",
+        '''
+[mcp_servers.shared]
+command = "two"
+''',
+    )
+    run_cli(["setup"], project, codex_home)
+    original_config = read_project_config(project)
+
+    exit_code, stdout, stderr = run_cli(["mcp", "enable", "one", "two"], project, codex_home)
+
+    assert exit_code == 1
+    assert stdout == ""
+    assert "Duplicate MCP server id shared" in stderr
+    assert read_project_config(project) == original_config
+
+
+def test_mcp_list_shows_available_enabled_and_missing_sources(workspace, run_cli):
+    """mcp list shows reusable sources without reading user Codex config."""
+    project, codex_home = workspace
+    _write_mcp_source(codex_home, "browsermcp")
+    _write_mcp_source(
+        codex_home,
+        "context7",
+        '''
+[mcp_servers.context7]
+command = "context7"
+''',
+    )
+    run_cli(["setup"], project, codex_home)
+    run_cli(["mcp", "enable", "--no-sync", "browsermcp"], project, codex_home)
+    config_path = project / ".codex" / "codexmgr.toml"
+    config_path.write_text(config_path.read_text(encoding="utf-8").replace(
+        'enabled = ["browsermcp"]',
+        'enabled = ["browsermcp", "missing"]',
+    ), encoding="utf-8")
 
     list_exit, list_stdout, list_stderr = run_cli(["mcp", "list"], project, codex_home)
 
-    assert captured == {
-        "command": ["codex", "mcp", "list", "--json"],
-        "cwd": project,
-        "capture_output": True,
-        "text": True,
-    }
     assert list_exit == 0
     assert list_stderr == ""
-    assert "browsermcp available=enabled override=disabled" in list_stdout
-    assert "fields=bearer_token_env_var, enabled" in list_stdout
-    assert "context7 available=disabled override=none" in list_stdout
+    assert "browsermcp source=enabled servers=browsermcp" in list_stdout
+    assert "context7 source=available servers=context7" in list_stdout
+    assert "missing source=missing" in list_stdout
 
 
-def test_mcp_list_reports_codex_discovery_failures(workspace, run_cli, monkeypatch):
-    """mcp list fails loudly when Codex server discovery fails."""
+def test_mcp_list_reports_invalid_source_files(workspace, run_cli):
+    """mcp list fails loudly when an available source file is invalid."""
     project, codex_home = workspace
-
-    def fake_run(command, cwd, capture_output, text):
-        return SimpleNamespace(returncode=2, stdout="", stderr="bad config")
-
-    monkeypatch.setattr("codexmgr.mcp.discovery.subprocess.run", fake_run)
+    _write_mcp_source(codex_home, "bad", 'model = "gpt-5"\n')
 
     exit_code, stdout, stderr = run_cli(["mcp", "list"], project, codex_home)
 
     assert exit_code == 1
     assert stdout == ""
-    assert "codex mcp list --json failed: bad config" in stderr
+    assert "must contain an [mcp_servers] table" in stderr
 
 
 def test_mcp_show_reads_project_overrides(workspace, run_cli):
-    """mcp show inspects configured project override entries."""
+    """mcp show inspects reusable sources and project enabled state."""
     project, codex_home = workspace
+    _write_mcp_source(codex_home, "browsermcp")
     run_cli(["setup"], project, codex_home)
-    run_cli(["mcp", "disable", "--no-sync", "browsermcp"], project, codex_home)
+    run_cli(["mcp", "enable", "--no-sync", "browsermcp"], project, codex_home)
     run_cli(["mcp", "set-token-env", "--no-sync", "browsermcp", "BROWSERMCP_TOKEN"], project, codex_home)
 
     show_exit, show_stdout, show_stderr = run_cli(["mcp", "show", "browsermcp"], project, codex_home)
 
     assert show_exit == 0
     assert show_stderr == ""
-    assert "Server override: browsermcp" in show_stdout
-    assert "State: disabled" in show_stdout
-    assert "Bearer token env var: BROWSERMCP_TOKEN" in show_stdout
+    assert "MCP source: browsermcp" in show_stdout
+    assert "State: enabled" in show_stdout
+    assert "Servers: browsermcp" in show_stdout
+    assert "Project override fields: browsermcp.bearer_token_env_var" in show_stdout
 
 
 def test_mcp_parameter_commands_write_project_overrides(workspace, run_cli, read_project_config):
@@ -343,7 +415,7 @@ def test_mcp_set_field_rejects_unsafe_fields_without_touching_user_config(worksp
 
 
 def test_mcp_validate_reports_project_override_warnings(workspace, run_cli):
-    """validate checks project override shape and does not read user config."""
+    """validate accepts Codex-shaped server fields and does not read user config."""
     project, codex_home = workspace
     run_cli(["setup"], project, codex_home)
     (project / ".codex" / "codexmgr.toml").write_text(
@@ -359,6 +431,28 @@ env = { TOKEN = "raw" }
 
     assert exit_code == 0
     assert stderr == ""
-    assert "Valid MCP config: 1 server override" in stdout
-    assert "WARN Unsupported MCP override field preserved nowhere: browsermcp.env" in stdout
+    assert "Valid MCP config: 0 sources, 1 server" in stdout
     assert not (codex_home / "config.toml").exists()
+
+
+def _write_mcp_source(codexmgr_home, name, content=None):
+    """Create a reusable MCP source file for CLI tests.
+
+    Args:
+        codexmgr_home: Codexmgr home directory.
+        name: Source file stem.
+        content: Optional TOML content for the source.
+
+    Returns:
+        Path to the created source file.
+    """
+    source_dir = codexmgr_home / "mcp"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    path = source_dir / f"{name}.toml"
+    path.write_text(
+        content
+        if content is not None
+        else f'[mcp_servers.{name}]\ncommand = "{name}"\n',
+        encoding="utf-8",
+    )
+    return path

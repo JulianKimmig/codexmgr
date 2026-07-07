@@ -34,7 +34,7 @@ def items_for_section(staged: StagedConfig, section: str) -> tuple[list[ManagedI
     if section == "packages":
         return package_items(staged), ""
     if section == "mcp":
-        return mcp_items(staged, discover=True)
+        return mcp_items(staged)
     return [], ""
 
 

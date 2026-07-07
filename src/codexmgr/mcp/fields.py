@@ -31,19 +31,16 @@ SET_FIELD_NAMES = {
 
 
 def validate_override(server_id: str, table: Mapping[str, Any], *, strict: bool) -> None:
-    """Validate one server override table.
+    """Validate known fields in one server overlay table.
 
     Args:
         server_id: MCP server id.
         table: Server override table.
-        strict: Whether unsupported fields should fail.
+        strict: Accepted for compatibility; unknown Codex fields pass through.
     """
     for field, value in table.items():
-        if field not in SAFE_FIELDS:
-            if strict:
-                raise CommandError(f"Unsupported MCP override field: {server_id}.{field}")
-            continue
-        validate_field(server_id, field, value)
+        if field in SAFE_FIELDS:
+            validate_field(server_id, field, value)
 
 
 def validate_field(server_id: str, field: str, value: Any) -> None:
@@ -101,38 +98,30 @@ def is_string_map(value: Any) -> bool:
 
 
 def known_fields(table: Mapping[str, Any]) -> dict[str, Any]:
-    """Return only fields supported by generated MCP overrides.
+    """Return MCP server fields as plain TOML values.
 
     Args:
         table: Server override table.
 
     Returns:
-        Supported fields and values.
+        Plain field values keyed by field name.
     """
     return {
         key: plain_toml_value(value)
         for key, value in table.items()
-        if key in SAFE_FIELDS
     }
 
 
 def unsupported_field_warnings(overrides: Mapping[str, Mapping[str, Any]]) -> list[str]:
-    """Build validation warnings for unsupported project MCP fields.
+    """Return compatibility warnings for project MCP fields.
 
     Args:
         overrides: Project MCP overrides.
 
     Returns:
-        Warning lines.
+        Empty warning list. Codex-shaped MCP fields pass through.
     """
-    warnings: list[str] = []
-    for server_id, table in overrides.items():
-        for field in table:
-            if field not in SAFE_FIELDS:
-                warnings.append(
-                    f"WARN Unsupported MCP override field preserved nowhere: {server_id}.{field}"
-                )
-    return warnings
+    return []
 
 
 def parse_value(raw_value: str) -> Any:

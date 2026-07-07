@@ -19,21 +19,21 @@ def add_mcp_parser(
     Returns:
         None. The parser is mutated in place.
     """
-    mcp = subparsers.add_parser("mcp", help="Manage project MCP server overrides")
+    mcp = subparsers.add_parser("mcp", help="Manage project MCP sources and overrides")
     mcp_subparsers = mcp.add_subparsers(dest="mcp_command", required=True)
 
-    mcp_subparsers.add_parser("list", help="List project MCP server overrides")
+    mcp_subparsers.add_parser("list", help="List reusable MCP sources")
 
-    show = mcp_subparsers.add_parser("show", help="Show one project MCP override")
-    show.add_argument("server_id", help="MCP server id")
+    show = mcp_subparsers.add_parser("show", help="Show one reusable MCP source")
+    show.add_argument("server_id", help="MCP source name")
 
-    enable = mcp_subparsers.add_parser("enable", help="Enable an MCP server locally")
+    enable = mcp_subparsers.add_parser("enable", help="Enable reusable MCP sources")
     add_no_sync_argument(enable)
-    enable.add_argument("server_ids", nargs="+", help="MCP server ids")
+    enable.add_argument("server_ids", nargs="+", help="MCP source names")
 
-    disable = mcp_subparsers.add_parser("disable", help="Disable an MCP server locally")
+    disable = mcp_subparsers.add_parser("disable", help="Disable reusable MCP sources")
     add_no_sync_argument(disable)
-    disable.add_argument("server_ids", nargs="+", help="MCP server ids")
+    disable.add_argument("server_ids", nargs="+", help="MCP source names")
 
     token = mcp_subparsers.add_parser(
         "set-token-env",

@@ -14,14 +14,15 @@ from ..core.paths import config_path, resolve_template
 from ..core.toml_io import dump_toml, load_optional_toml_file, write_toml_file
 from ..hooks.config import hook_lists, set_hook_state_in_config
 from ..hooks.sources import require_hook_source
-from ..mcp.config import resolve_overrides, set_enabled_in_config
+from ..mcp.project import mcp_source_names, set_mcp_source_enabled_in_config
+from ..mcp.sources import require_mcp_source
 from ..project.apply import apply_project_config
 from ..project.config import agents_md_sources, require_codex_dir, set_agents_md_sources
 from ..skills.config import _skill_lists, set_skill_state_in_config
 from .mutations import (
     remove_agent,
     remove_hook,
-    remove_mcp_server,
+    remove_mcp_source,
     remove_rule,
     remove_skill,
 )
@@ -43,7 +44,7 @@ class StagedConfig(PackageStageMixin):
         original_agents: Custom-agent names configured when the stage was loaded.
         original_hooks: Hook names configured when the stage was loaded.
         original_rules: Rule refs configured when the stage was loaded.
-        original_mcp_servers: MCP server ids configured when the stage was loaded.
+        original_mcp_sources: MCP source names configured when the stage was loaded.
     """
 
     cwd: Path
@@ -55,7 +56,7 @@ class StagedConfig(PackageStageMixin):
     original_agents: frozenset[str]
     original_hooks: frozenset[str]
     original_rules: frozenset[str]
-    original_mcp_servers: frozenset[str]
+    original_mcp_sources: frozenset[str]
 
     def dirty(self) -> bool:
         """Return whether staged config differs from the loaded file.
@@ -183,25 +184,27 @@ class StagedConfig(PackageStageMixin):
             remove_agent(self.config, agent)
 
     def set_mcp_enabled(self, server_id: str, enabled: bool) -> None:
-        """Set an MCP server enabled override.
+        """Set a reusable MCP source enabled state.
 
         Args:
-            server_id: MCP server id.
+            server_id: MCP source name.
             enabled: Desired enabled state.
         """
-        set_enabled_in_config(self.config, server_id, enabled)
+        if enabled:
+            require_mcp_source(server_id, self.codexmgr_home)
+        set_mcp_source_enabled_in_config(self.config, server_id, enabled=enabled)
 
     def set_mcp_selected(self, server_id: str, selected: bool) -> None:
-        """Apply checkbox semantics for an MCP server.
+        """Apply checkbox semantics for a reusable MCP source.
 
         Args:
-            server_id: MCP server id.
-            selected: Whether the server is currently checked.
+            server_id: MCP source name.
+            selected: Whether the source is currently checked.
         """
-        if selected or server_id in self.original_mcp_servers:
+        if selected or server_id in self.original_mcp_sources:
             self.set_mcp_enabled(server_id, selected)
         else:
-            remove_mcp_server(self.config, server_id)
+            remove_mcp_source(self.config, server_id)
 
 def load_staged_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> StagedConfig:
     """Load project configuration into a staged config object.
@@ -222,7 +225,7 @@ def load_staged_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> Stag
     enabled_agents, disabled_agents = agent_lists(config)
     enabled_hooks, disabled_hooks = hook_lists(config)
     enabled_rules, disabled_rules = rule_lists(config)
-    mcp_servers = resolve_overrides(config, strict=False)
+    mcp_sources = mcp_source_names(config)
     return StagedConfig(
         cwd,
         codex_home,
@@ -233,7 +236,7 @@ def load_staged_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> Stag
         frozenset([*enabled_agents, *disabled_agents]),
         frozenset([*enabled_hooks, *disabled_hooks]),
         frozenset([*enabled_rules, *disabled_rules]),
-        frozenset(mcp_servers),
+        frozenset(mcp_sources),
     )
 
 

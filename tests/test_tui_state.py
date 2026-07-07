@@ -6,6 +6,7 @@ from codexmgr.interface.parser import build_parser
 from codexmgr.project.sync import generated_file_diffs
 from codexmgr.tui.diff import staged_diff_lines
 from codexmgr.tui.items import agent_items, package_items, rule_items
+from codexmgr.tui.mcp_items import mcp_items
 from codexmgr.tui.state import load_staged_config, save_staged_config
 
 
@@ -369,31 +370,52 @@ skills = ["strict-review"]
     ]
 
 
-def test_staged_mcp_toggle_updates_enabled_field_only(
+def test_staged_mcp_toggle_updates_enabled_sources_only(
     workspace,
-    run_cli,
+    run_cli_with_homes,
     read_project_config,
 ):
-    """MCP editing in the TUI is limited to the enabled override field."""
+    """MCP editing in the TUI stages reusable source enablement."""
     project, codex_home = workspace
-    run_cli(["setup"], project, codex_home)
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_mcp_source(codexmgr_home, "browsermcp")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+
+    staged = load_staged_config(project, codex_home, codexmgr_home)
+    staged.set_mcp_enabled("browsermcp", True)
+    save_staged_config(staged, no_sync=True)
+
+    assert read_project_config(project)["mcp"]["enabled"] == ["browsermcp"]
+
+
+def test_mcp_items_show_available_enabled_and_missing_sources(
+    workspace,
+    run_cli_with_homes,
+):
+    """The TUI MCP section displays reusable source state and server ids."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    _write_mcp_source(codexmgr_home, "browsermcp")
+    _write_mcp_source(codexmgr_home, "context7")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
     config_path = project / ".codex" / "codexmgr.toml"
     config_path.write_text(
         '''
-[mcp.servers.browsermcp]
-bearer_token_env_var = "BROWSERMCP_TOKEN"
+[mcp]
+enabled = ["browsermcp", "missing"]
 ''',
         encoding="utf-8",
     )
 
-    staged = load_staged_config(project, codex_home, codex_home)
-    staged.set_mcp_enabled("browsermcp", True)
-    save_staged_config(staged, no_sync=True)
+    staged = load_staged_config(project, codex_home, codexmgr_home)
+    items, warning = mcp_items(staged)
 
-    assert read_project_config(project)["mcp"]["servers"]["browsermcp"] == {
-        "bearer_token_env_var": "BROWSERMCP_TOKEN",
-        "enabled": True,
-    }
+    assert warning == ""
+    assert [(item.name, item.state, item.missing, item.detail) for item in items] == [
+        ("browsermcp", "enabled", False, "servers=browsermcp"),
+        ("context7", "available", False, "servers=context7"),
+        ("missing", "enabled", True, "source missing"),
+    ]
 
 
 def test_staged_diff_summary_and_unified_diff_do_not_write_files(
@@ -428,6 +450,15 @@ def _write_skill(home, name):
     skill_file = skill_dir / "SKILL.md"
     skill_file.write_text("# Skill\n", encoding="utf-8")
     return skill_file
+
+
+def _write_mcp_source(codexmgr_home, name):
+    """Create a reusable MCP source for TUI tests."""
+    source_dir = codexmgr_home / "mcp"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    path = source_dir / f"{name}.toml"
+    path.write_text(f'[mcp_servers.{name}]\ncommand = "{name}"\n', encoding="utf-8")
+    return path
 
 
 def _write_agent(home, name):

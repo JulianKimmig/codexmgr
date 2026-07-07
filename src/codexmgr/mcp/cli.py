@@ -1,11 +1,17 @@
-"""CLI helpers for project-local MCP server override configuration."""
+"""CLI helpers for project-local MCP source and server configuration."""
 
 import argparse
 from pathlib import Path
 from typing import TextIO
 
 from . import config as mcp
-from .discovery import available_state, discover_codex_servers
+from .project import disable_mcp_sources, enable_mcp_sources, mcp_source_names
+from .resolution import validate_mcp_config
+from .sources import (
+    available_mcp_source_names,
+    mcp_source_file,
+    resolve_mcp_source,
+)
 from ..project.apply import apply_project_config
 
 
@@ -30,15 +36,15 @@ def run_mcp_command(
     """
     command = args.mcp_command
     if command == "list":
-        _write_lines(stdout, _list_lines(cwd))
+        _write_lines(stdout, _list_lines(cwd, codexmgr_home))
         return 0
     if command == "show":
-        _write_lines(stdout, _show_lines(cwd, args.server_id))
+        _write_lines(stdout, _show_lines(cwd, codexmgr_home, args.server_id))
         return 0
     if command == "validate":
-        _write_lines(stdout, mcp.validate_overrides(cwd))
+        _write_lines(stdout, validate_mcp_config(cwd, codexmgr_home))
         return 0
-    messages = _mutate(args, cwd)
+    messages = _mutate(args, cwd, codexmgr_home)
     return _finish_mcp_change(
         messages,
         args.no_sync,
@@ -49,23 +55,24 @@ def run_mcp_command(
     )
 
 
-def _mutate(args: argparse.Namespace, cwd: Path) -> list[str]:
+def _mutate(args: argparse.Namespace, cwd: Path, codexmgr_home: Path) -> list[str]:
     """Run one mutating MCP command.
 
     Args:
         args: Parsed argparse namespace.
         cwd: Project directory.
+        codexmgr_home: Codexmgr home directory containing MCP source files.
 
     Returns:
         User-facing success messages.
     """
     command = args.mcp_command
     if command == "enable":
-        server_ids = mcp.set_enabled_many(cwd, args.server_ids, True)
-        return [f"Enabled MCP server override {server_id}" for server_id in server_ids]
+        names = enable_mcp_sources(args.server_ids, cwd, codexmgr_home)
+        return [f"Enabled MCP source {name}" for name in names]
     if command == "disable":
-        server_ids = mcp.set_enabled_many(cwd, args.server_ids, False)
-        return [f"Disabled MCP server override {server_id}" for server_id in server_ids]
+        names = disable_mcp_sources(args.server_ids, cwd, codexmgr_home)
+        return [f"Disabled MCP source {name}" for name in names]
     if command == "set-token-env":
         server_id = mcp.set_token_env(cwd, args.server_id, args.env_var)
         return [f"Updated MCP server override {server_id} bearer_token_env_var"]
@@ -87,75 +94,113 @@ def _mutate(args: argparse.Namespace, cwd: Path) -> list[str]:
     raise AssertionError(f"Unhandled mcp command: {command}")
 
 
-def _list_lines(cwd: Path) -> list[str]:
-    """Build display lines for available MCP servers and project overrides.
+def _list_lines(cwd: Path, codexmgr_home: Path) -> list[str]:
+    """Build display lines for reusable MCP sources and project overlays.
 
     Args:
         cwd: Project directory.
+        codexmgr_home: Codexmgr home directory containing MCP source files.
 
     Returns:
         Display lines.
     """
     overrides = mcp.configured_overrides(cwd)
-    available = discover_codex_servers(cwd)
-    server_ids = sorted(set(available) | set(overrides))
-    if not server_ids:
-        return ["MCP servers: none"]
+    enabled_sources = mcp_source_names(_project_config(cwd))
+    available_sources = set(available_mcp_source_names(codexmgr_home))
+    names = sorted(available_sources | set(enabled_sources) | set(overrides))
+    if not names:
+        return ["MCP sources: none"]
     lines: list[str] = []
-    for server_id in server_ids:
-        fields = overrides.get(server_id, {})
+    for name in names:
+        fields = overrides.get(name, {})
         field_names = ", ".join(sorted(fields))
-        line = (
-            f"{server_id} available={available_state(available.get(server_id))} "
-            f"override={_override_state(fields)}"
-        )
+        line = f"{name} source={_source_state(name, enabled_sources, available_sources)}"
+        source = resolve_mcp_source(name, codexmgr_home)
+        if source is not None:
+            line = f"{line} servers={', '.join(sorted(source.servers))}"
         if field_names:
-            line = f"{line} fields={field_names}"
+            line = f"{line} override_fields={field_names}"
         lines.append(line)
     return lines
 
 
-def _show_lines(cwd: Path, server_id: str) -> list[str]:
-    """Build display lines for one MCP override.
+def _show_lines(cwd: Path, codexmgr_home: Path, name: str) -> list[str]:
+    """Build display lines for one reusable MCP source.
 
     Args:
         cwd: Project directory.
-        server_id: MCP server id.
+        codexmgr_home: Codexmgr home directory containing MCP source files.
+        name: MCP source name.
 
     Returns:
         Display lines.
     """
+    enabled_sources = mcp_source_names(_project_config(cwd))
     overrides = mcp.configured_overrides(cwd)
-    if server_id not in overrides:
-        return [f"MCP server override not configured: {server_id}"]
-    fields = overrides[server_id]
-    lines = [f"Server override: {server_id}", f"State: {_override_state(fields)}"]
-    if "bearer_token_env_var" in fields:
-        lines.append(f"Bearer token env var: {fields['bearer_token_env_var']}")
-    if "env_vars" in fields:
-        lines.append(f"Forwarded env vars: {', '.join(fields['env_vars'])}")
-    if "env_http_headers" in fields:
-        headers = ", ".join(f"{key}={value}" for key, value in fields["env_http_headers"].items())
-        lines.append(f"Env HTTP headers: {headers}")
+    source = resolve_mcp_source(name, codexmgr_home)
+    if source is None and name not in enabled_sources and name not in overrides:
+        return [f"MCP source not configured: {name}"]
+    lines = [f"MCP source: {name}", f"State: {_source_state(name, enabled_sources, set(available_mcp_source_names(codexmgr_home)))}"]
+    lines.append(f"Path: {mcp_source_file(codexmgr_home, name)}")
+    if source is None:
+        lines.append("Source file: missing")
+    else:
+        lines.append(f"Servers: {', '.join(sorted(source.servers))}")
+    server_ids = set(source.servers) if source is not None else {name}
+    override_lines = _override_lines(overrides, server_ids)
+    if override_lines:
+        lines.extend(override_lines)
     return lines
 
 
-def _override_state(fields: dict) -> str:
-    """Return display state for an override table.
+def _source_state(name: str, enabled_sources: list[str], available_sources: set[str]) -> str:
+    """Return display state for an MCP source.
 
     Args:
-        fields: MCP override fields.
+        name: MCP source name.
+        enabled_sources: Project-enabled source names.
+        available_sources: Source names available in CODEXMGR_HOME.
 
     Returns:
         Display state.
     """
-    if not fields:
-        return "none"
-    if fields.get("enabled") is True:
-        return "enabled"
-    if fields.get("enabled") is False:
-        return "disabled"
-    return "configured"
+    if name in enabled_sources:
+        return "enabled" if name in available_sources else "missing"
+    return "available" if name in available_sources else "none"
+
+
+def _override_lines(overrides: dict[str, dict], server_ids: set[str]) -> list[str]:
+    """Build display lines for project server overlay fields.
+
+    Args:
+        overrides: Project overlays keyed by server id.
+        server_ids: Server ids relevant to the displayed source.
+
+    Returns:
+        Display lines describing configured overlay fields.
+    """
+    fields = [
+        f"{server_id}.{field}"
+        for server_id, table in sorted(overrides.items())
+        if server_id in server_ids
+        for field in sorted(table)
+    ]
+    return [f"Project override fields: {', '.join(fields)}"] if fields else []
+
+
+def _project_config(cwd: Path) -> dict:
+    """Load project MCP config source for read-only display commands.
+
+    Args:
+        cwd: Project directory.
+
+    Returns:
+        Parsed project config.
+    """
+    from ..core.paths import config_path
+    from ..core.toml_io import load_optional_toml_file
+
+    return load_optional_toml_file(config_path(cwd))
 
 
 def _finish_mcp_change(

@@ -1,9 +1,9 @@
 # codexmgr
 
 `codexmgr` manages reusable Codex project setup. Keep shared `AGENTS.md`
-snippets, skills, hooks, custom agents, rule files, packages, and safe MCP
-overrides in one manager home, then sync the selected pieces into each project
-from `.codex/codexmgr.toml`.
+snippets, skills, hooks, custom agents, rule files, packages, and reusable MCP
+source files in one manager home, then sync the selected pieces into each
+project from `.codex/codexmgr.toml`.
 
 The tool is for people who use Codex in several repositories and do not want to
 copy the same agent instructions by hand. When a shared rule changes, update it
@@ -14,7 +14,7 @@ Use `codexmgr` when a project should:
 - build `AGENTS.md` from reusable instruction snippets
 - share skills, hooks, custom agents, and rule files across repositories
 - enable packaged Codex setups made from those reusable pieces
-- keep project MCP overrides out of the user-level Codex config
+- keep reusable MCP server definitions out of the user-level Codex config
 - check whether generated Codex files match the project config
 - run `codex` with project `.codex/config.toml` values passed as `-c` overrides
 
@@ -125,7 +125,7 @@ file for you, and you can also edit it by hand when that is clearer.
 - `.codex/codexmgr.lock`: resolved AGENTS.md, agent, skill, hook, rule, and MCP
   state
 - `.codex/config.toml`: project-local Codex config, including generated
-  `[[skills.config]]` entries and `[mcp_servers.<id>]` overrides
+  `[[skills.config]]` entries and `[mcp_servers.<id>]` server definitions
 - `.codex/hooks.json`: generated hook config for enabled reusable hook bundles
 - `.codex/hooks/<name>`: copied support files for enabled hook bundles
 - `.codex/agents/<name>.toml`: copied custom-agent definitions
@@ -147,7 +147,7 @@ Manual content outside this block is preserved. If the block is missing,
 
 `.codex/codexmgr.toml` can opt into each resource type independently. A minimal
 file may only contain `[agents_md]`; larger projects can add skills, custom
-agents, hooks, reusable rules, and MCP overrides as needed. Package commands
+agents, hooks, reusable rules, and MCP sources or overlays as needed. Package commands
 write those same tables rather than a separate package table.
 
 ```toml
@@ -165,6 +165,8 @@ disabled = ["experimental-hook"]
 [rules]
 enabled = ["react/", "python/testing.md"]
 disabled = ["react/materials/"]
+[mcp]
+enabled = ["browsermcp"]
 [mcp.servers.browsermcp]
 enabled = true
 bearer_token_env_var = "BROWSERMCP_TOKEN"
@@ -272,7 +274,7 @@ These commands run `apply` automatically unless `--no-sync` is passed.
 
 `codexmgr tui` opens a Textual-based terminal UI for project-local
 configuration. It shows `AGENTS.md` snippets, skills, hooks, custom agents,
-packages, and MCP server enable overrides in selectable lists. Rules are shown
+packages, and reusable MCP sources in selectable lists. Rules are shown
 in a collapsible folder tree.
 
 Changes are staged in memory while you navigate. Press `s` to save; the save
@@ -295,9 +297,10 @@ The dashboard shows generated-file sync state. By default it lists stale
 generated paths; with `--show-diff`, it shows unified diffs for the staged
 configuration.
 
-MCP editing in the TUI is intentionally limited to the project-local `enabled`
-override. Advanced MCP fields remain available through the `codexmgr mcp ...`
-commands.
+MCP editing in the TUI is intentionally limited to loading and unloading
+reusable `$CODEXMGR_HOME/mcp/*.toml` sources. Advanced per-server overlay fields
+remain available through the `codexmgr mcp ...` commands or direct
+`.codex/codexmgr.toml` edits.
 
 ## Template Format
 
@@ -449,40 +452,62 @@ The wrapper can run with a just-in-time package/profile overlay without changing
 codexmgr codex --package repo-rules --profile strict python -- exec "review this"
 ```
 
-## Project MCP Overrides
+## Project MCP Sources
 
-`codexmgr mcp ...` edits only project-local configuration:
+`codexmgr mcp ...` loads reusable MCP definitions from `$CODEXMGR_HOME/mcp`
+into project-local configuration:
 
-- source state is stored in `.codex/codexmgr.toml` under
-  `[mcp.servers.<id>]`
-- `apply` writes generated overrides into `.codex/config.toml` under
+- reusable source state is stored in `.codex/codexmgr.toml` under `[mcp]`
+- per-project server overlays are stored under `[mcp.servers.<id>]`
+- `apply` writes generated server definitions into `.codex/config.toml` under
   `[mcp_servers.<id>]`
 - `$CODEX_HOME/config.toml` and `~/.codex/config.toml` are never modified
 
 Mutating MCP commands require a project `.codex/` directory and run `apply`
-automatically unless `--no-sync` is passed. They do not create or remove MCP
-server definitions; use `codex mcp add` or direct Codex config editing for the
-base server setup.
+automatically unless `--no-sync` is passed.
 
-List MCP servers available from Codex and show any project override state:
+Create reusable source files in the same `mcp_servers` shape Codex reads from
+`config.toml`:
+
+```toml
+# ~/.codexmgr/mcp/browsermcp.toml
+[mcp_servers.browsermcp]
+command = "browsermcp"
+args = ["--port", "3000"]
+env_vars = ["BROWSERMCP_TOKEN"]
+```
+
+List reusable sources and show project state:
 
 ```bash
 codexmgr mcp list
-codexmgr mcp show context7
+codexmgr mcp show browsermcp
 codexmgr mcp validate
 ```
 
-`codexmgr mcp list` shells out to `codex mcp list --json` for read-only
-discovery. It does not edit user configuration.
-
-Enable or disable an existing server without deleting its definition:
+Enable or disable reusable sources for the current project:
 
 ```bash
-codexmgr mcp disable context7
-codexmgr mcp enable context7
+codexmgr mcp enable browsermcp context7
+codexmgr mcp disable browsermcp
 ```
 
-Update token and environment references without storing literal token values:
+`disable` unloads the source from `[mcp].enabled`. It does not keep a generated
+server definition with `enabled = false`.
+
+Use `[mcp.servers.<id>]` for project-local overlays. Overlays merge after source
+files, so they can override or add fields:
+
+```toml
+[mcp]
+enabled = ["browsermcp"]
+
+[mcp.servers.browsermcp]
+enabled = false
+bearer_token_env_var = "BROWSERMCP_TOKEN"
+```
+
+Update common token and environment references from the CLI:
 
 ```bash
 codexmgr mcp set-token-env figma FIGMA_TOKEN
@@ -492,7 +517,7 @@ codexmgr mcp set-env-header figma Authorization FIGMA_AUTH_HEADER
 codexmgr mcp unset-env-header figma Authorization
 ```
 
-Set a small allowlist of non-secret fields from TOML literals:
+Set a small allowlist of overlay fields from TOML literals:
 
 ```bash
 codexmgr mcp set-field context7 required true
@@ -502,12 +527,11 @@ codexmgr mcp set-field context7 default_tools_approval_mode '"prompt"'
 
 Supported `set-field` names are `required`, `startup_timeout_sec`,
 `tool_timeout_sec`, `enabled_tools`, `disabled_tools`, and
-`default_tools_approval_mode`. The direct `enable` and `disable` commands manage
-the `enabled` field.
+`default_tools_approval_mode`.
 
-Literal API token writes are intentionally not part of this command surface;
-prefer environment variable references such as `bearer_token_env_var`,
-`env_vars`, and `env_http_headers`.
+Source files and hand-written overlays can use the full Codex `mcp_servers`
+shape. Prefer environment variable references such as `bearer_token_env_var`,
+`env_vars`, and `env_http_headers` for secrets.
 
 ## Development
 

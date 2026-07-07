@@ -12,38 +12,21 @@ from .generated import (
     obsolete_generated_files,
     remove_file_target,
 )
+from .resolution import resolve_project_components
 from .state import GeneratedFile, ProjectBuild
-from ..agents.manager import resolve_locked_agents_md
 from ..core.paths import config_path, lock_path, project_codex_dir
 from ..core.toml_io import load_optional_toml_file
 from ..custom_agents.copies import (
     apply_agent_copy,
     remove_agent_copy_target,
 )
-from ..custom_agents.resolution import (
-    AgentResolution,
-    empty_agent_resolution,
-    resolve_project_agents,
-)
-from ..mcp.config import resolve_overrides
 from ..rules.copies import apply_rule_copy, remove_rule_copy_target
-from ..rules.resolution import (
-    RuleResolution,
-    empty_rule_resolution,
-    resolve_project_rules,
-)
 from ..skills.copies import (
     apply_skill_copy,
     expected_copy_files,
     remove_skill_copy_target,
 )
-from ..skills.resolution import SkillResolution, resolve_project_skills
 from ..hooks.copies import apply_hook_copy, remove_hook_copy_target
-from ..hooks.resolution import (
-    HookResolution,
-    empty_hook_resolution,
-    resolve_project_hooks,
-)
 
 
 def setup_project(cwd: Path) -> Path:
@@ -141,53 +124,54 @@ def build_project_state_from_config(
         Expected generated project state for the supplied configuration.
     """
     previous_lock = load_optional_toml_file(lock_path(cwd))
-    locked_agents_md = resolve_locked_agents_md(config, cwd, codexmgr_home)
-    agent_resolution = _resolve_agents(config, cwd, codexmgr_home, previous_lock)
-    skill_resolution = _resolve_skills(config, cwd, codex_home, codexmgr_home, previous_lock)
-    hook_resolution = _resolve_hooks(config, cwd, codexmgr_home, previous_lock)
-    rule_resolution = _resolve_rules(config, cwd, codexmgr_home, previous_lock)
-    mcp_overrides = resolve_overrides(config, strict=True)
+    resolution = resolve_project_components(
+        config,
+        cwd,
+        codex_home,
+        codexmgr_home,
+        previous_lock,
+    )
     codex_config = build_codex_config(
         cwd,
         config,
-        skill_resolution.entries,
-        mcp_overrides,
+        resolution.skills.entries,
+        resolution.mcp,
         previous_lock,
     )
     lock_data = build_lock_data(
         config,
-        locked_agents_md,
-        agent_resolution,
-        skill_resolution,
-        hook_resolution,
-        rule_resolution,
-        mcp_overrides,
+        resolution.locked_agents_md,
+        resolution.agents,
+        resolution.skills,
+        resolution.hooks,
+        resolution.rules,
+        resolution.mcp,
     )
     files = build_generated_files(
         cwd,
         config,
-        locked_agents_md,
-        hook_resolution,
+        resolution.locked_agents_md,
+        resolution.hooks,
         lock_data,
         codex_config,
     )
     return ProjectBuild(
         files,
         [
-            *expected_copy_files(skill_resolution.copies),
-            *hook_resolution.copy_files,
-            *agent_resolution.copy_files,
-            *rule_resolution.copy_files,
+            *expected_copy_files(resolution.skills.copies),
+            *resolution.hooks.copy_files,
+            *resolution.agents.copy_files,
+            *resolution.rules.copy_files,
         ],
-        skill_resolution.copies,
-        skill_resolution.obsolete_copy_targets,
-        hook_resolution.copies,
-        hook_resolution.obsolete_copy_targets,
-        agent_resolution.copies,
-        agent_resolution.obsolete_copy_targets,
-        rule_resolution.copies,
-        rule_resolution.obsolete_copy_targets,
-        obsolete_generated_files(cwd, hook_resolution),
+        resolution.skills.copies,
+        resolution.skills.obsolete_copy_targets,
+        resolution.hooks.copies,
+        resolution.hooks.obsolete_copy_targets,
+        resolution.agents.copies,
+        resolution.agents.obsolete_copy_targets,
+        resolution.rules.copies,
+        resolution.rules.obsolete_copy_targets,
+        obsolete_generated_files(cwd, resolution.hooks),
     )
 
 
@@ -207,93 +191,3 @@ def build_project_files(
         Expected generated files with their complete text content.
     """
     return build_project_state(cwd, codex_home, codexmgr_home).files
-
-
-def _resolve_skills(
-    config: dict[str, Any],
-    cwd: Path,
-    codex_home: Path,
-    codexmgr_home: Path,
-    previous_lock: dict[str, Any],
-) -> SkillResolution:
-    """Resolve skills only when the project config owns the skills table.
-
-    Args:
-        config: Parsed project codexmgr configuration.
-        cwd: Project directory.
-        codex_home: Codex home directory.
-        codexmgr_home: codexmgr home directory.
-        previous_lock: Existing codexmgr lock data.
-
-    Returns:
-        Resolved skill state.
-    """
-    if "skills" not in config:
-        return SkillResolution([], [], [])
-    return resolve_project_skills(config, cwd, codex_home, codexmgr_home, previous_lock)
-
-
-def _resolve_agents(
-    config: dict[str, Any],
-    cwd: Path,
-    codexmgr_home: Path,
-    previous_lock: dict[str, Any],
-) -> AgentResolution:
-    """Resolve custom agents only when the project config owns the agents table.
-
-    Args:
-        config: Parsed project codexmgr configuration.
-        cwd: Project directory.
-        codexmgr_home: codexmgr home directory.
-        previous_lock: Existing codexmgr lock data.
-
-    Returns:
-        Resolved custom-agent state.
-    """
-    if "agents" not in config:
-        return empty_agent_resolution()
-    return resolve_project_agents(config, cwd, codexmgr_home, previous_lock)
-
-
-def _resolve_hooks(
-    config: dict[str, Any],
-    cwd: Path,
-    codexmgr_home: Path,
-    previous_lock: dict[str, Any],
-) -> HookResolution:
-    """Resolve hooks only when the project config owns the hooks table.
-
-    Args:
-        config: Parsed project codexmgr configuration.
-        cwd: Project directory.
-        codexmgr_home: codexmgr home directory.
-        previous_lock: Existing codexmgr lock data.
-
-    Returns:
-        Resolved hook state.
-    """
-    if "hooks" not in config:
-        return empty_hook_resolution()
-    return resolve_project_hooks(config, cwd, codexmgr_home, previous_lock)
-
-
-def _resolve_rules(
-    config: dict[str, Any],
-    cwd: Path,
-    codexmgr_home: Path,
-    previous_lock: dict[str, Any],
-) -> RuleResolution:
-    """Resolve rules only when the project config owns the rules table.
-
-    Args:
-        config: Parsed project codexmgr configuration.
-        cwd: Project directory.
-        codexmgr_home: codexmgr home directory.
-        previous_lock: Existing codexmgr lock data.
-
-    Returns:
-        Resolved reusable-rule state.
-    """
-    if "rules" not in config:
-        return empty_rule_resolution()
-    return resolve_project_rules(config, cwd, codexmgr_home, previous_lock)
