@@ -65,7 +65,7 @@ def main(
     )
 
     try:
-        return _dispatch(args, project_dir, codex_dir, codexmgr_dir, out)
+        return _dispatch(args, project_dir, codex_dir, codexmgr_dir, out, err)
     except CommandError as exc:
         err.write(f"{exc}\n")
         return 1
@@ -100,6 +100,7 @@ def _dispatch(
     codex_home: Path,
     codexmgr_home: Path,
     stdout: TextIO,
+    stderr: TextIO,
 ) -> int:
     """Run the parsed command.
 
@@ -109,6 +110,7 @@ def _dispatch(
         codex_home: Global Codex home for resolving named skills.
         codexmgr_home: codexmgr home for resolving named AGENTS.md templates.
         stdout: Stream for command output.
+        stderr: Stream for command warnings.
 
     Returns:
         A process-style exit code where zero means success.
@@ -136,7 +138,13 @@ def _dispatch(
         return run_codexmgr_home_action(codexmgr_home, args.cd_action, stdout)
 
     if args.command == "codex":
-        return run_codex_command(cwd, codex_home, codexmgr_home, args.codex_args)
+        return run_codex_command(
+            cwd,
+            codex_home,
+            codexmgr_home,
+            args.codex_args,
+            stderr,
+        )
 
     if args.command == "agentsmd" and args.agentsmd_command == "list":
         options = list_agentsmd_options(codexmgr_home)

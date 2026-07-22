@@ -5,25 +5,11 @@ import tomllib
 from types import SimpleNamespace
 
 from codexmgr.commands.codex import build_codex_command
-from codexmgr.core.toml_io import format_toml_value
 from codexmgr.interface.cli import main
 
 
-def _format_config_override(key, value):
-    """Format a Codex -c override with production TOML escaping.
-
-    Args:
-        key: Dotted Codex config key.
-        value: Python value to serialize as TOML.
-
-    Returns:
-        Complete key=value override string.
-    """
-    return f"{key}={format_toml_value(value)}"
-
-
-def test_build_codex_command_includes_configured_skills(workspace):
-    """The wrapper prepends config overrides from .codex/config.toml."""
+def test_build_codex_command_proxies_args_without_flattening_project_config(workspace):
+    """The command relies on project CODEX_HOME instead of injected overrides."""
     project, _ = workspace
     (project / ".codex").mkdir()
     (project / ".codex" / "config.toml").write_text(
@@ -51,32 +37,18 @@ enabled = false
 
     command = build_codex_command(project, ["exec", "hello"])
 
-    assert command == [
-        "codex",
-        "-c",
-        'model_instructions_file="codexmgr-AGENTS.md"',
-        "-c",
-        'sandbox_permissions=["disk-full-read-access"]',
-        "-c",
-        'shell_environment_policy.inherit="all"',
-        "-c",
-        'skills.config=[{path="/abs/enabled/SKILL.md", enabled=true}, '
-        '{path="/abs/disabled/SKILL.md", enabled=false}, '
-        '{name="missing", enabled=false}]',
-        "exec",
-        "hello",
-    ]
+    assert command == ["codex", "exec", "hello"]
 
 
-def test_build_codex_command_uses_no_config_overrides_when_missing(workspace):
-    """Missing .codex/config.toml forwards only the original codex args."""
+def test_build_codex_command_proxies_args_when_project_config_is_missing(workspace):
+    """Missing .codex/config.toml does not affect argument proxying."""
     project, _ = workspace
 
     assert build_codex_command(project, ["--help"]) == ["codex", "--help"]
 
 
-def test_build_codex_command_merges_user_config_overrides(workspace):
-    """User -c values merge after project config before invoking codex."""
+def test_build_codex_command_proxies_user_config_overrides(workspace):
+    """User -c values retain their original order and representation."""
     project, _ = workspace
     (project / ".codex").mkdir()
     (project / ".codex" / "config.toml").write_text(
@@ -107,19 +79,17 @@ enabled = true
     assert command == [
         "codex",
         "-c",
-        'model="o3"',
-        "-c",
-        'sandbox_permissions=["disk-read", "network"]',
-        "-c",
-        'skills.config=[{path="/abs/enabled/SKILL.md", enabled=true}, '
-        '{name="imagegen", enabled=false}]',
+        'skills.config=[{name="imagegen", enabled=false}]',
+        "--config",
+        'sandbox_permissions=["network"]',
+        '--config=model="o3"',
         "exec",
         "hello",
     ]
 
 
-def test_build_codex_command_merges_repeated_user_lists(workspace):
-    """Repeated user list overrides append into one final config value."""
+def test_build_codex_command_keeps_repeated_user_lists(workspace):
+    """Repeated user list overrides remain separate pass-through arguments."""
     project, _ = workspace
 
     command = build_codex_command(
@@ -135,20 +105,37 @@ def test_build_codex_command_merges_repeated_user_lists(workspace):
     assert command == [
         "codex",
         "-c",
-        'skills.config=[{name="first", enabled=true}, {name="second", enabled=false}]',
+        'skills.config=[{name="first", enabled=true}]',
+        "-c",
+        'skills.config=[{name="second", enabled=false}]',
     ]
 
 
-def test_codex_subcommand_passes_args_and_return_code(workspace, monkeypatch):
-    """codexmgr codex forwards all args to the external codex command."""
+def test_codex_subcommand_uses_project_home_auth_and_return_code(
+    workspace,
+    monkeypatch,
+):
+    """Default launch uses project CODEX_HOME and links the global auth file."""
     project, codex_home = workspace
     (project / ".codex").mkdir()
     (project / ".codex" / "codexmgr.toml").write_text("", encoding="utf-8")
+    user_home = project.parent / "user-home"
+    global_auth = user_home / ".codex" / "auth.json"
+    global_auth.parent.mkdir(parents=True)
+    global_auth.write_text('{"token": "test"}\n', encoding="utf-8")
+    stale_auth = project.parent / "stale-auth.json"
+    stale_auth.write_text('{"token": "stale"}\n', encoding="utf-8")
+    (project / ".codex" / "auth.json").symlink_to(stale_auth)
+    monkeypatch.delenv("CODEX_GLOBAL_AUTH", raising=False)
+    monkeypatch.setenv("HOME", str(user_home))
+    monkeypatch.setenv("CODEXMGR_LAUNCH_TEST", "forwarded")
     captured = {}
 
-    def fake_run(command, cwd):
+    def fake_run(command, cwd, env):
         captured["command"] = command
         captured["cwd"] = cwd
+        captured["codex_home"] = env["CODEX_HOME"]
+        captured["environment_marker"] = env["CODEXMGR_LAUNCH_TEST"]
         return SimpleNamespace(returncode=42)
 
     monkeypatch.setattr("codexmgr.commands.codex.subprocess.run", fake_run)
@@ -168,7 +155,85 @@ def test_codex_subcommand_passes_args_and_return_code(workspace, monkeypatch):
     assert captured == {
         "command": ["codex", "--help"],
         "cwd": project,
+        "codex_home": str(project / ".codex"),
+        "environment_marker": "forwarded",
     }
+    auth_link = project / ".codex" / "auth.json"
+    assert auth_link.is_symlink()
+    assert auth_link.readlink() == global_auth
+
+
+def test_codex_subcommand_warns_when_global_auth_is_missing(workspace, monkeypatch):
+    """Default launch warns and continues when no global auth file exists."""
+    project, codex_home = workspace
+    (project / ".codex").mkdir()
+    (project / ".codex" / "codexmgr.toml").write_text("", encoding="utf-8")
+    missing_auth = codex_home / "missing-auth.json"
+    monkeypatch.setenv("CODEX_GLOBAL_AUTH", str(missing_auth))
+    captured = {}
+
+    def fake_run(command, cwd, env):
+        captured["command"] = command
+        captured["cwd"] = cwd
+        captured["codex_home"] = env["CODEX_HOME"]
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("codexmgr.commands.codex.subprocess.run", fake_run)
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = main(
+        ["codex", "exec", "hello"],
+        cwd=project,
+        codex_home=codex_home,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert exit_code == 0
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue() == (
+        "codexmgr codex: warning: no global auth found at "
+        f"{missing_auth}; you may need to auth once.\n"
+    )
+    assert captured == {
+        "command": ["codex", "exec", "hello"],
+        "cwd": project,
+        "codex_home": str(project / ".codex"),
+    }
+    assert not (project / ".codex" / "auth.json").exists()
+
+
+def test_codex_subcommand_simple_mode_runs_basic_codex(workspace, monkeypatch):
+    """The --simple launch skips project apply, local home, and auth linking."""
+    project, codex_home = workspace
+    global_auth = codex_home / "auth.json"
+    global_auth.write_text('{"token": "test"}\n', encoding="utf-8")
+    monkeypatch.setenv("CODEX_GLOBAL_AUTH", str(global_auth))
+    captured = {}
+
+    def fake_run(command, cwd):
+        captured["command"] = command
+        captured["cwd"] = cwd
+        return SimpleNamespace(returncode=12)
+
+    monkeypatch.setattr("codexmgr.commands.codex.subprocess.run", fake_run)
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    exit_code = main(
+        ["codex", "--simple", "exec", "hello"],
+        cwd=project,
+        codex_home=codex_home,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert exit_code == 12
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue() == ""
+    assert captured == {"command": ["codex", "exec", "hello"], "cwd": project}
+    assert not (project / ".codex").exists()
 
 
 def test_codex_subcommand_applies_project_config_before_running_codex(
@@ -188,12 +253,14 @@ enabled = ["example"]
 ''',
         encoding="utf-8",
     )
+    _configure_global_auth(codex_home, monkeypatch)
 
     captured = {}
 
-    def fake_run(command, cwd):
+    def fake_run(command, cwd, env):
         captured["command"] = command
         captured["cwd"] = cwd
+        captured["codex_home"] = env["CODEX_HOME"]
         assert (project / ".codex" / "config.toml").is_file()
         return SimpleNamespace(returncode=7)
 
@@ -213,17 +280,9 @@ enabled = ["example"]
     assert stdout.getvalue() == ""
     assert stderr.getvalue() == ""
     assert captured == {
-        "command": [
-            "codex",
-            "-c",
-            _format_config_override(
-                "skills.config",
-                [{"path": str(skill_file.resolve()), "enabled": True}],
-            ),
-            "exec",
-            "hello",
-        ],
+        "command": ["codex", "exec", "hello"],
         "cwd": project,
+        "codex_home": str(project / ".codex"),
     }
 
 
@@ -279,11 +338,13 @@ skills = ["strict-skill"]
 ''',
     )
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    _configure_global_auth(codex_home, monkeypatch)
     captured = {}
 
-    def fake_run(command, cwd):
+    def fake_run(command, cwd, env):
         captured["command"] = command
         captured["cwd"] = cwd
+        captured["codex_home"] = env["CODEX_HOME"]
         captured["codexmgr_toml"] = (
             project / ".codex" / "codexmgr.toml"
         ).read_text(encoding="utf-8")
@@ -324,6 +385,7 @@ skills = ["strict-skill"]
     assert stdout.getvalue() == ""
     assert stderr.getvalue() == ""
     assert captured["cwd"] == project
+    assert captured["codex_home"] == str(project / ".codex")
     assert captured["codexmgr_toml"] == ""
     assert captured["config"]["skills"]["config"] == [
         {"path": str(base_skill.resolve()), "enabled": True},
@@ -331,19 +393,7 @@ skills = ["strict-skill"]
     ]
     assert "# rules\nstrict\n" in captured["agents_md"]
     assert captured["agent"] == 'name = "agent"\n'
-    assert captured["command"] == [
-        "codex",
-        "-c",
-        _format_config_override(
-            "skills.config",
-            [
-                {"path": str(base_skill.resolve()), "enabled": True},
-                {"path": str(strict_skill.resolve()), "enabled": True},
-            ],
-        ),
-        "exec",
-        "hello",
-    ]
+    assert captured["command"] == ["codex", "exec", "hello"]
     assert (project / ".codex" / "codexmgr.toml").read_text(encoding="utf-8") == ""
     assert tomllib.loads((project / ".codex" / "config.toml").read_text()) == {}
     assert not (project / ".codex" / "codexmgr.lock").exists()
@@ -364,10 +414,12 @@ def test_codex_jit_overlay_snapshots_and_restores_rules(
     _write_home_rule(codexmgr_home, "react/components.md", "# Components\n")
     _write_package(codexmgr_home, "frontend", 'rules = ["react/"]\n')
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    _configure_global_auth(codex_home, monkeypatch)
     captured = {}
 
-    def fake_run(command, cwd):
+    def fake_run(command, cwd, env):
         captured["command"] = command
+        captured["codex_home"] = env["CODEX_HOME"]
         captured["rule"] = (
             project / ".rules" / "react" / "components.md"
         ).read_text(encoding="utf-8")
@@ -390,6 +442,7 @@ def test_codex_jit_overlay_snapshots_and_restores_rules(
     assert stdout.getvalue() == ""
     assert stderr.getvalue() == ""
     assert captured["command"] == ["codex", "exec", "hello"]
+    assert captured["codex_home"] == str(project / ".codex")
     assert captured["rule"] == "# Components\n"
     assert not (project / ".rules").exists()
 
@@ -410,6 +463,22 @@ def _write_package(codexmgr_home, name, content):
     path = package_dir / "config.toml"
     path.write_text(content, encoding="utf-8")
     return path
+
+
+def _configure_global_auth(codex_home, monkeypatch):
+    """Create and select an isolated global auth file for a launch test.
+
+    Args:
+        codex_home: Temporary Codex home in which to create auth.json.
+        monkeypatch: Pytest environment mutation fixture.
+
+    Returns:
+        Path to the selected global auth file.
+    """
+    global_auth = codex_home / "auth.json"
+    global_auth.write_text('{"token": "test"}\n', encoding="utf-8")
+    monkeypatch.setenv("CODEX_GLOBAL_AUTH", str(global_auth))
+    return global_auth
 
 
 def _write_home_skill(codexmgr_home, name):

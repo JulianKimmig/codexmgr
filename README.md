@@ -16,7 +16,7 @@ Use `codexmgr` when a project should:
 - enable packaged Codex setups made from those reusable pieces
 - keep reusable MCP server definitions out of the user-level Codex config
 - check whether generated Codex files match the project config
-- run `codex` with project `.codex/config.toml` values passed as `-c` overrides
+- run `codex` with the project `.codex` directory as its local Codex home
 
 The basic model has three parts:
 
@@ -436,14 +436,23 @@ Codex wrapper command:
 
 ```bash
 codexmgr codex <args...>
+codexmgr codex --simple <args...>
 ```
 
-`codexmgr codex` applies the current project config, flattens
-`.codex/config.toml` into `-c key=value` overrides, and forwards the remaining
-arguments to the real `codex` command.
+By default, `codexmgr codex` applies the current project config, launches the
+real `codex` command with `CODEX_HOME` set to `<project>/.codex`, and forwards
+Codex arguments unchanged. Codex reads `.codex/config.toml` directly, so
+user-provided `-c` and `--config` arguments retain their normal Codex behavior.
 
-User-provided `-c` or `--config` overrides are merged after project config.
-Scalar values replace earlier values, while list values append.
+The wrapper links the global authentication file into `.codex/auth.json`. It
+uses `CODEX_GLOBAL_AUTH` when that variable is non-empty and otherwise uses
+`$HOME/.codex/auth.json`. A missing auth source produces a warning but does not
+stop Codex, which can then authenticate normally.
+
+Use `--simple` immediately after `codex` to run the basic command without
+applying project state, changing the child `CODEX_HOME`, or managing an auth
+link. This launch wrapper is intentionally CLI-only because the TUI does not
+embed or proxy external terminal sessions.
 
 The wrapper can run with a just-in-time package/profile overlay without changing
 `.codex/codexmgr.toml`. Put Codex arguments after `--` when using this syntax:
