@@ -9,7 +9,7 @@ from codexmgr.interface.cli import main
 
 
 def test_build_codex_command_proxies_args_without_flattening_project_config(workspace):
-    """The command relies on project CODEX_HOME instead of injected overrides."""
+    """The command relies on project config instead of injected overrides."""
     project, _ = workspace
     (project / ".codex").mkdir()
     (project / ".codex" / "config.toml").write_text(
@@ -111,21 +111,26 @@ def test_build_codex_command_keeps_repeated_user_lists(workspace):
     ]
 
 
-def test_codex_subcommand_uses_project_home_auth_and_return_code(
+def test_codex_subcommand_uses_project_runtime_home_auth_and_return_code(
     workspace,
     monkeypatch,
 ):
-    """Default launch uses project CODEX_HOME and links the global auth file."""
+    """Default launch isolates runtime state and links the global auth file."""
     project, codex_home = workspace
     (project / ".codex").mkdir()
-    (project / ".codex" / "codexmgr.toml").write_text("", encoding="utf-8")
+    (project / ".codex" / "codexmgr.toml").write_text(
+        '[mcp.servers.example]\ncommand = "example"\n',
+        encoding="utf-8",
+    )
     user_home = project.parent / "user-home"
     global_auth = user_home / ".codex" / "auth.json"
     global_auth.parent.mkdir(parents=True)
     global_auth.write_text('{"token": "test"}\n', encoding="utf-8")
     stale_auth = project.parent / "stale-auth.json"
     stale_auth.write_text('{"token": "stale"}\n', encoding="utf-8")
-    (project / ".codex" / "auth.json").symlink_to(stale_auth)
+    runtime_home = project / ".codex" / ".runtime"
+    runtime_home.mkdir()
+    (runtime_home / "auth.json").symlink_to(stale_auth)
     monkeypatch.delenv("CODEX_GLOBAL_AUTH", raising=False)
     monkeypatch.setenv("HOME", str(user_home))
     monkeypatch.setenv("CODEXMGR_LAUNCH_TEST", "forwarded")
@@ -136,6 +141,9 @@ def test_codex_subcommand_uses_project_home_auth_and_return_code(
         captured["cwd"] = cwd
         captured["codex_home"] = env["CODEX_HOME"]
         captured["environment_marker"] = env["CODEXMGR_LAUNCH_TEST"]
+        captured["runtime_config_exists"] = (
+            project / ".codex" / ".runtime" / "config.toml"
+        ).exists()
         return SimpleNamespace(returncode=42)
 
     monkeypatch.setattr("codexmgr.commands.codex.subprocess.run", fake_run)
@@ -155,10 +163,15 @@ def test_codex_subcommand_uses_project_home_auth_and_return_code(
     assert captured == {
         "command": ["codex", "--help"],
         "cwd": project,
-        "codex_home": str(project / ".codex"),
+        "codex_home": str(runtime_home),
         "environment_marker": "forwarded",
+        "runtime_config_exists": False,
     }
-    auth_link = project / ".codex" / "auth.json"
+    assert runtime_home.is_dir()
+    assert tomllib.loads(
+        (project / ".codex" / "config.toml").read_text(encoding="utf-8")
+    )["mcp_servers"]["example"] == {"command": "example"}
+    auth_link = runtime_home / "auth.json"
     assert auth_link.is_symlink()
     assert auth_link.samefile(global_auth)
 
@@ -199,9 +212,10 @@ def test_codex_subcommand_warns_when_global_auth_is_missing(workspace, monkeypat
     assert captured == {
         "command": ["codex", "exec", "hello"],
         "cwd": project,
-        "codex_home": str(project / ".codex"),
+        "codex_home": str(project / ".codex" / ".runtime"),
     }
-    assert not (project / ".codex" / "auth.json").exists()
+    assert (project / ".codex" / ".runtime").is_dir()
+    assert not (project / ".codex" / ".runtime" / "auth.json").exists()
 
 
 def test_codex_subcommand_simple_mode_runs_basic_codex(workspace, monkeypatch):
@@ -282,7 +296,7 @@ enabled = ["example"]
     assert captured == {
         "command": ["codex", "exec", "hello"],
         "cwd": project,
-        "codex_home": str(project / ".codex"),
+        "codex_home": str(project / ".codex" / ".runtime"),
     }
 
 
@@ -385,7 +399,7 @@ skills = ["strict-skill"]
     assert stdout.getvalue() == ""
     assert stderr.getvalue() == ""
     assert captured["cwd"] == project
-    assert captured["codex_home"] == str(project / ".codex")
+    assert captured["codex_home"] == str(project / ".codex" / ".runtime")
     assert captured["codexmgr_toml"] == ""
     assert captured["config"]["skills"]["config"] == [
         {"path": str(base_skill.resolve()), "enabled": True},
@@ -442,7 +456,7 @@ def test_codex_jit_overlay_snapshots_and_restores_rules(
     assert stdout.getvalue() == ""
     assert stderr.getvalue() == ""
     assert captured["command"] == ["codex", "exec", "hello"]
-    assert captured["codex_home"] == str(project / ".codex")
+    assert captured["codex_home"] == str(project / ".codex" / ".runtime")
     assert captured["rule"] == "# Components\n"
     assert not (project / ".rules").exists()
 

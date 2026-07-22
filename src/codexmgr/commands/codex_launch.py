@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
+from ..core.paths import project_codex_dir, project_codex_runtime_dir
+
 
 @dataclass(frozen=True)
 class CodexLaunchRequest:
@@ -47,19 +49,21 @@ def build_project_codex_environment(
         environ: Source process environment, or ``os.environ`` when omitted.
 
     Returns:
-        A copied child environment. ``CODEX_HOME`` points to ``.codex`` when
-        that directory contains ``config.toml``.
+        A copied child environment. ``CODEX_HOME`` points to
+        ``.codex/.runtime`` when the project ``.codex`` directory contains
+        ``config.toml``.
     """
     environment = dict(os.environ if environ is None else environ)
-    project_codex_dir = cwd / ".codex"
-    if not (project_codex_dir / "config.toml").is_file():
+    config_dir = project_codex_dir(cwd)
+    if not (config_dir / "config.toml").is_file():
         return environment
 
-    project_codex_dir.mkdir(parents=True, exist_ok=True)
-    environment["CODEX_HOME"] = str(project_codex_dir)
+    runtime_dir = project_codex_runtime_dir(cwd)
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    environment["CODEX_HOME"] = str(runtime_dir)
     global_auth = _global_auth_path(environment)
     if global_auth.is_file():
-        _replace_auth_link(project_codex_dir / "auth.json", global_auth)
+        _replace_auth_link(runtime_dir / "auth.json", global_auth)
     else:
         stderr.write(
             "codexmgr codex: warning: no global auth found at "
@@ -87,7 +91,7 @@ def _replace_auth_link(auth_link: Path, global_auth: Path) -> None:
     """Replace the project auth entry with a link to global authentication.
 
     Args:
-        auth_link: Project-local ``.codex/auth.json`` link path.
+        auth_link: Project-local ``.codex/.runtime/auth.json`` link path.
         global_auth: Existing global authentication source file.
 
     Returns:

@@ -75,7 +75,8 @@ def test_managed_gitignore_ignores_unknown_runtime_state_only(workspace, run_cli
     """Git ignores future runtime names but exposes every codexmgr-owned path."""
     project, codex_home = workspace
     run_cli(["setup"], project, codex_home)
-    runtime_file = project / ".codex" / "future-runtime-state.bin"
+    runtime_file = project / ".codex" / ".runtime" / "future-runtime-state.bin"
+    runtime_file.parent.mkdir()
     runtime_file.write_text("runtime\n", encoding="utf-8")
     agent_file = project / ".codex" / "agents" / "local.toml"
     agent_file.parent.mkdir()
@@ -91,7 +92,7 @@ def test_managed_gitignore_ignores_unknown_runtime_state_only(workspace, run_cli
         text=True,
     )
 
-    assert _git_check_ignore(project, ".codex/future-runtime-state.bin") == 0
+    assert _git_check_ignore(project, ".codex/.runtime/future-runtime-state.bin") == 0
     for managed_path in [
         ".codex/.gitignore",
         ".codex/codexmgr.toml",

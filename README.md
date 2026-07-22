@@ -450,14 +450,19 @@ codexmgr codex --simple <args...>
 ```
 
 By default, `codexmgr codex` applies the current project config, launches the
-real `codex` command with `CODEX_HOME` set to `<project>/.codex`, and forwards
-Codex arguments unchanged. Codex reads `.codex/config.toml` directly, so
-user-provided `-c` and `--config` arguments retain their normal Codex behavior.
+real `codex` command with `CODEX_HOME` set to
+`<project>/.codex/.runtime`, and forwards Codex arguments unchanged. For a
+trusted project, Codex discovers the tracked `.codex/config.toml` as its
+project configuration independently of `CODEX_HOME`. This keeps generated MCP
+servers and other shared project settings in Git while mutable Codex state is
+written below the ignored `.codex/.runtime` directory. User-provided `-c` and
+`--config` arguments retain their normal Codex behavior.
 
-The wrapper links the global authentication file into `.codex/auth.json`. It
-uses `CODEX_GLOBAL_AUTH` when that variable is non-empty and otherwise uses
-`$HOME/.codex/auth.json`. A missing auth source produces a warning but does not
-stop Codex, which can then authenticate normally.
+The wrapper links the global authentication file into
+`.codex/.runtime/auth.json`. It uses `CODEX_GLOBAL_AUTH` when that variable is
+non-empty and otherwise uses `$HOME/.codex/auth.json`. A missing auth source
+produces a warning but does not stop Codex, which can then authenticate within
+the project runtime home.
 
 Use `--simple` immediately after `codex` to run the basic command without
 applying project state, changing the child `CODEX_HOME`, or managing an auth

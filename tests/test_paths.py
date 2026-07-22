@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from codexmgr.core.paths import global_codex_dir, global_codexmgr_dir
+from codexmgr.core.paths import (
+    global_codex_dir,
+    global_codexmgr_dir,
+    project_codex_runtime_dir,
+)
 
 
 def test_defaults_to_home_codex_directory(monkeypatch: pytest.MonkeyPatch):
@@ -33,3 +37,10 @@ def test_codexmgr_home_uses_environment_variable(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setenv("CODEXMGR_HOME", "/tmp/custom-codexmgr-home")
 
     assert global_codexmgr_dir() == Path("/tmp/custom-codexmgr-home")
+
+
+def test_project_codex_runtime_directory_is_nested_below_project_config():
+    """Mutable Codex state has a dedicated home below the project config."""
+    project = Path("/tmp/example-project")
+
+    assert project_codex_runtime_dir(project) == project / ".codex" / ".runtime"

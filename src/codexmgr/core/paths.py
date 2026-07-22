@@ -36,6 +36,18 @@ def project_codex_dir(cwd: Path) -> Path:
     return cwd / ".codex"
 
 
+def project_codex_runtime_dir(cwd: Path) -> Path:
+    """Return the project-local Codex runtime-home path.
+
+    Args:
+        cwd: Project directory.
+
+    Returns:
+        The ignored ``.codex/.runtime`` directory used as ``CODEX_HOME``.
+    """
+    return project_codex_dir(cwd) / ".runtime"
+
+
 def config_path(cwd: Path) -> Path:
     """Return the project codexmgr.toml path.
 
