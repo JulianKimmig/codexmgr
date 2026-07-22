@@ -18,6 +18,7 @@ MANAGED_IGNORE_RULES = """*
 !/agents/**
 !/hooks/
 !/hooks/**
+__pycache__/
 """
 
 
