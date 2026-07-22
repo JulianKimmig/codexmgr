@@ -14,7 +14,8 @@ MANAGED_BODY = """*
 !/agents/
 !/agents/**
 !/hooks/
-!/hooks/**"""
+!/hooks/**
+__pycache__/"""
 MANAGED_BLOCK = f"{BEGIN}\n{MANAGED_BODY}\n{END}"
 
 
