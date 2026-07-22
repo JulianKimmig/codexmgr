@@ -160,7 +160,7 @@ def test_codex_subcommand_uses_project_home_auth_and_return_code(
     }
     auth_link = project / ".codex" / "auth.json"
     assert auth_link.is_symlink()
-    assert auth_link.readlink() == global_auth
+    assert auth_link.samefile(global_auth)
 
 
 def test_codex_subcommand_warns_when_global_auth_is_missing(workspace, monkeypatch):
