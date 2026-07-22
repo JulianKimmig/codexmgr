@@ -72,6 +72,18 @@ def codex_config_path(cwd: Path) -> Path:
     return project_codex_dir(cwd) / "config.toml"
 
 
+def codex_gitignore_path(cwd: Path) -> Path:
+    """Return the managed project Codex ignore-file path.
+
+    Args:
+        cwd: Project directory.
+
+    Returns:
+        Path to .codex/.gitignore.
+    """
+    return project_codex_dir(cwd) / ".gitignore"
+
+
 def agents_md_path(cwd: Path) -> Path:
     """Return the project AGENTS.md path.
 

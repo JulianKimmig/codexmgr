@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Any
 
+from .gitignore import build_project_gitignore_file
 from .state import GeneratedFile
 from ..agents.file import render_managed_agents_md
 from ..agents.renderer import render_agents_markdown
@@ -67,7 +68,7 @@ def build_generated_files(
     Returns:
         Expected generated files in write order.
     """
-    files: list[GeneratedFile] = []
+    files: list[GeneratedFile] = [build_project_gitignore_file(cwd)]
     if lock_data:
         files.append(GeneratedFile(lock_path(cwd), dump_toml(lock_data)))
     if "agents_md" in config:

@@ -68,7 +68,8 @@ codexmgr setup
 ```
 
 `setup` creates `.codex/`, creates `.codex/codexmgr.toml` if it is missing, and
-runs `apply`. Existing project config is preserved.
+runs `apply`. Existing project config is preserved. Apply also creates or
+refreshes codexmgr's managed block in `.codex/.gitignore`.
 
 Create a reusable `AGENTS.md` snippet in the manager home. This command creates
 `$CODEXMGR_HOME/agentsmd/coding.toml` and refuses to overwrite an existing file:
@@ -122,6 +123,9 @@ file for you, and you can also edit it by hand when that is clearer.
 
 `apply` resolves the source config and may write or update these managed files:
 
+- `.codex/.gitignore`: preserves manual rules outside its managed block,
+  ignores every unknown `.codex` entry by default, and explicitly exposes the
+  codexmgr-owned files and directories listed below
 - `.codex/codexmgr.lock`: resolved AGENTS.md, agent, skill, hook, rule, and MCP
   state
 - `.codex/config.toml`: project-local Codex config, including generated
@@ -343,6 +347,12 @@ managed project files, and refreshes generated state.
 `apply --check` exits with a failure if generated files are out of sync without
 writing them. `apply --diff` also avoids writing and prints unified diffs for
 the expected generated-file changes.
+
+The `.codex/.gitignore` managed block uses a default-ignore rule rather than a
+list of known runtime filenames. New caches, databases, sessions, and other
+state created by future Codex versions therefore remain outside Git without a
+codexmgr update. Project configuration, custom agents, and hook support files
+remain visible to Git.
 
 `doctor` checks project setup, home environment variables, project TOML syntax,
 referenced snippets, enabled skills, enabled custom agents, enabled hook
