@@ -8,6 +8,7 @@ from typing import Any
 
 from ..core.errors import CommandError
 from ..core.toml_io import plain_toml_value
+from .sources import CODEXMGR_HOME_SOURCE, project_skill_dir
 
 
 @dataclass(frozen=True)
@@ -38,24 +39,39 @@ class SkillCopyFile:
     content: bytes
 
 
-def validate_copy_targets(copies: list[SkillCopy], previous_lock: Mapping[str, Any]) -> None:
+def validate_copy_targets(
+    copies: list[SkillCopy],
+    previous_lock: Mapping[str, Any],
+    cwd: Path,
+    codexmgr_home: Path,
+) -> None:
     """Reject first-time copies over unmanaged target folders.
 
     Args:
         copies: Current managed copies to create or refresh.
         previous_lock: Previous codexmgr lock data.
+        cwd: Current project root used to rebind portable targets.
+        codexmgr_home: Current codexmgr home used to rebind portable sources.
     """
-    previous = previous_skill_copies(previous_lock)
+    previous = previous_skill_copies(previous_lock, cwd, codexmgr_home)
     for copy in copies:
         if copy.name not in previous and copy.target.exists():
-            raise CommandError(f"Refusing to overwrite unmanaged skill copy: {copy.target}")
+            raise CommandError(
+                f"Refusing to overwrite unmanaged skill copy: {copy.target}"
+            )
 
 
-def previous_skill_copies(previous_lock: Mapping[str, Any]) -> dict[str, SkillCopy]:
+def previous_skill_copies(
+    previous_lock: Mapping[str, Any],
+    cwd: Path,
+    codexmgr_home: Path,
+) -> dict[str, SkillCopy]:
     """Read managed skill-copy metadata from previous lock data.
 
     Args:
         previous_lock: Parsed .codex/codexmgr.lock data.
+        cwd: Current project root used to rebind portable targets.
+        codexmgr_home: Current codexmgr home used to rebind portable sources.
 
     Returns:
         Previous managed copies keyed by skill name.
@@ -65,7 +81,7 @@ def previous_skill_copies(previous_lock: Mapping[str, Any]) -> dict[str, SkillCo
         raise CommandError("codexmgr.lock skills.copies must be a list")
     copies: dict[str, SkillCopy] = {}
     for raw_copy in raw_copies:
-        copy = _copy_from_lock_entry(raw_copy)
+        copy = _copy_from_lock_entry(raw_copy, cwd, codexmgr_home)
         copies[copy.name] = copy
     return copies
 
@@ -73,12 +89,16 @@ def previous_skill_copies(previous_lock: Mapping[str, Any]) -> dict[str, SkillCo
 def obsolete_copy_targets(
     previous_lock: Mapping[str, Any],
     current_copies: list[SkillCopy],
+    cwd: Path,
+    codexmgr_home: Path,
 ) -> list[Path]:
     """Return previous managed copy targets absent from current state.
 
     Args:
         previous_lock: Previous codexmgr lock data.
         current_copies: Current managed copies.
+        cwd: Current project root used to rebind portable targets.
+        codexmgr_home: Current codexmgr home used to rebind portable sources.
 
     Returns:
         Sorted target directories to remove.
@@ -86,7 +106,11 @@ def obsolete_copy_targets(
     current_names = {copy.name for copy in current_copies}
     return sorted(
         copy.target
-        for name, copy in previous_skill_copies(previous_lock).items()
+        for name, copy in previous_skill_copies(
+            previous_lock,
+            cwd,
+            codexmgr_home,
+        ).items()
         if name not in current_names
     )
 
@@ -103,8 +127,8 @@ def copy_lock_entries(copies: list[SkillCopy]) -> list[dict[str, str]]:
     return [
         {
             "name": copy.name,
-            "source": str(copy.source.resolve()),
-            "target": str(copy.target.resolve()),
+            "source": CODEXMGR_HOME_SOURCE,
+            "target": f".agents/skills/{copy.name}",
         }
         for copy in copies
     ]
@@ -156,11 +180,17 @@ def remove_skill_copy_target(target: Path) -> None:
         target.unlink()
 
 
-def _copy_from_lock_entry(raw_copy: Any) -> SkillCopy:
+def _copy_from_lock_entry(
+    raw_copy: Any,
+    cwd: Path,
+    codexmgr_home: Path,
+) -> SkillCopy:
     """Parse one skill-copy lock entry.
 
     Args:
         raw_copy: Plain lock entry value.
+        cwd: Current project root used to rebind the target.
+        codexmgr_home: Current codexmgr home used to rebind the source.
 
     Returns:
         Parsed managed skill copy.
@@ -170,9 +200,20 @@ def _copy_from_lock_entry(raw_copy: Any) -> SkillCopy:
     name = raw_copy.get("name")
     source = raw_copy.get("source")
     target = raw_copy.get("target")
-    if not isinstance(name, str) or not isinstance(source, str) or not isinstance(target, str):
-        raise CommandError("codexmgr.lock skills.copies entries must include name, source, and target")
-    return SkillCopy(name, Path(source), Path(target))
+    if not all(isinstance(value, str) for value in (name, source, target)):
+        raise CommandError(
+            "codexmgr.lock skills.copies entries must include name, source, "
+            "and target"
+        )
+    if name in {"", ".", ".."} or Path(name).name != name:
+        raise CommandError(
+            "codexmgr.lock skills.copies entries must use a safe skill name"
+        )
+    return SkillCopy(
+        name,
+        codexmgr_home / "skills" / name,
+        project_skill_dir(cwd, name),
+    )
 
 
 def _source_dirs(source: Path) -> list[Path]:

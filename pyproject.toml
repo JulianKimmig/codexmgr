@@ -1,10 +1,11 @@
 [project]
 name = "codexmgr"
-version = "0.4.1"
+version = "0.5.0"
 description = "Manage project-local Codex configuration from reusable templates"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "pyyaml>=6.0.3",
     "textual>=8.2.7",
     "tomlkit>=0.15.0",
 ]
@@ -30,7 +31,6 @@ codexmgr = "codexmgr.interface.cli:entrypoint"
 [project.optional-dependencies]
 dev = [
     "pytest>=9.0.3",
-    "pyyaml>=6.0.3",
     "pytest-asyncio>=1.4.0",
 ]
 

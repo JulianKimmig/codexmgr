@@ -4,9 +4,10 @@ requires-python = ">=3.11"
 
 [[package]]
 name = "codexmgr"
-version = "0.4.1"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
+    { name = "pyyaml" },
     { name = "textual" },
     { name = "tomlkit" },
 ]
@@ -15,7 +16,6 @@ dependencies = [
 dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
-    { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
@@ -27,7 +27,7 @@ dev = [
 requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.4.0" },
-    { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.3" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "textual", specifier = ">=8.2.7" },
     { name = "tomlkit", specifier = ">=0.15.0" },
 ]

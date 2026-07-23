@@ -183,14 +183,7 @@ def _home_skill_names(home: Path) -> list[str]:
     Returns:
         Sorted skill names with a SKILL.md file.
     """
-    skills_dir = home / "skills"
-    if not skills_dir.is_dir():
-        return []
-    return sorted(
-        path.name
-        for path in skills_dir.iterdir()
-        if path.is_dir() and (path / "SKILL.md").is_file()
-    )
+    return _skill_names(home / "skills")
 
 
 def _local_skill_names(cwd: Path) -> list[str]:
@@ -202,7 +195,18 @@ def _local_skill_names(cwd: Path) -> list[str]:
     Returns:
         Sorted local skill names with a SKILL.md file.
     """
-    skills_dir = cwd / ".agents" / "skills"
+    return _skill_names(cwd / ".agents" / "skills")
+
+
+def _skill_names(skills_dir: Path) -> list[str]:
+    """Return sorted child-folder names containing a skill file.
+
+    Args:
+        skills_dir: Store directory containing named skill folders.
+
+    Returns:
+        Sorted folder names with an immediate ``SKILL.md`` child.
+    """
     if not skills_dir.is_dir():
         return []
     return sorted(

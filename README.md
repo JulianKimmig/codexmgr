@@ -187,17 +187,30 @@ Named `AGENTS.md` snippets resolve from
 `$CODEXMGR_HOME/agentsmd/<name>.toml`. Path-like snippet values resolve
 relative to the project unless they are absolute paths.
 
-Named skills resolve from `$CODEXMGR_HOME/skills/<name>/SKILL.md` or
-`$CODEX_HOME/skills/<name>/SKILL.md`. Duplicate names across distinct homes
-fail so the selected skill is not ambiguous.
+Bare skill names resolve across the project `.agents/skills`,
+`$CODEXMGR_HOME/skills`, and `$CODEX_HOME/skills` stores. If the same folder
+name exists in more than one store, apply fails and asks for an explicit path.
+The project copy recorded for an enabled `$CODEXMGR_HOME` skill is recognized
+as a managed mirror and does not create a false collision on later applies.
 
 Enabled skills from `$CODEXMGR_HOME` are copied into `.agents/skills/<name>` on
 every apply. The copy overlays source files while preserving extra local files.
 Path-like skill values can point to a `SKILL.md` file or a directory containing
-`SKILL.md`.
+`SKILL.md`; a path-like value that does not exist is an error.
 
-Missing skills are still written as name-based entries. That lets Codex resolve
-them later from another installed skill source.
+Project-local and copied manager-home skills generate portable `name` selectors
+using the `name` value in their `SKILL.md` YAML frontmatter. Selected skills in
+those stores must therefore have valid frontmatter and a non-empty name. Apply
+also fails if two discoverable skills declare the same generated name. Skills
+resolved directly from `$CODEX_HOME` and explicit path references keep absolute
+`path` selectors because those sources are machine-specific or explicitly
+requested. Missing bare names remain name-based entries so Codex can resolve
+them later from another installed source.
+
+Managed skill-copy lock entries use the logical source `codexmgr_home` and a
+project-relative `.agents/skills/<name>` target. Apply accepts legacy absolute
+copy entries and rewrites them in this portable form, so moving or cloning a
+project does not churn generated skill config or lock state.
 
 Named custom agents resolve from `$CODEXMGR_HOME/agents/<name>.toml`. Enabled
 agents are copied into `.codex/agents/<name>.toml`; disabled agents remove the

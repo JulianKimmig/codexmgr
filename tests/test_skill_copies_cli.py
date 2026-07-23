@@ -11,7 +11,6 @@ def test_apply_copies_enabled_codexmgr_home_skill(
     project, codex_home = workspace
     codexmgr_home = codex_home.parent / "codexmgr-home"
     source_file = _write_skill(codexmgr_home, "review", "# Review\n")
-    source_dir = source_file.parent
     target_dir = project / ".agents" / "skills" / "review"
     target_file = target_dir / "SKILL.md"
 
@@ -26,15 +25,18 @@ def test_apply_copies_enabled_codexmgr_home_skill(
     assert exit_code == 0
     assert stderr == ""
     assert "Enabled review" in stdout
-    assert target_file.read_text(encoding="utf-8") == "# Review\n"
-    expected_entries = [{"path": str(target_file.resolve()), "enabled": True}]
+    assert target_file.read_text(encoding="utf-8") == _skill_text(
+        "review",
+        "# Review\n",
+    )
+    expected_entries = [{"name": "review", "enabled": True}]
     assert read_codex_config(project)["skills"]["config"] == expected_entries
     assert read_lock(project)["skills"]["config"] == expected_entries
     assert read_lock(project)["skills"]["copies"] == [
         {
             "name": "review",
-            "source": str(source_dir.resolve()),
-            "target": str(target_dir.resolve()),
+            "source": "codexmgr_home",
+            "target": ".agents/skills/review",
         },
     ]
 
@@ -51,14 +53,19 @@ def test_apply_overlay_copy_overwrites_source_files_and_keeps_extra_files(
     source_nested.parent.mkdir()
     source_nested.write_text("source v1\n", encoding="utf-8")
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
-    run_cli_with_homes(["skill", "enable", "review"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(
+        ["skill", "enable", "review"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
 
     target_dir = project / ".agents" / "skills" / "review"
     target_file = target_dir / "SKILL.md"
     target_file.write_text("local edit\n", encoding="utf-8")
     extra_file = target_dir / "local-only.md"
     extra_file.write_text("keep me\n", encoding="utf-8")
-    source_file.write_text("# Review v2\n", encoding="utf-8")
+    source_file.write_text(_skill_text("review", "# Review v2\n"), encoding="utf-8")
     source_nested.write_text("source v2\n", encoding="utf-8")
     exit_code, _, stderr = run_cli_with_homes(
         ["apply"],
@@ -69,7 +76,10 @@ def test_apply_overlay_copy_overwrites_source_files_and_keeps_extra_files(
 
     assert exit_code == 0
     assert stderr == ""
-    assert target_file.read_text(encoding="utf-8") == "# Review v2\n"
+    assert target_file.read_text(encoding="utf-8") == _skill_text(
+        "review",
+        "# Review v2\n",
+    )
     assert (target_dir / "notes" / "guide.md").read_text(encoding="utf-8") == (
         "source v2\n"
     )
@@ -88,7 +98,12 @@ def test_disabling_codexmgr_home_skill_removes_managed_copy(
     _write_skill(codexmgr_home, "review", "# Review\n")
     target_dir = project / ".agents" / "skills" / "review"
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
-    run_cli_with_homes(["skill", "enable", "review"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(
+        ["skill", "enable", "review"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
 
     exit_code, stdout, stderr = run_cli_with_homes(
         ["skill", "disable", "review"],
@@ -106,7 +121,7 @@ def test_disabling_codexmgr_home_skill_removes_managed_copy(
     assert read_lock(project)["skills"] == {"config": expected_entries}
 
 
-def test_disabling_local_only_agents_skill_keeps_folder_and_disables_path(
+def test_disabling_local_only_agents_skill_keeps_folder_and_disables_name(
     workspace,
     run_cli_with_homes,
     read_codex_config,
@@ -116,7 +131,10 @@ def test_disabling_local_only_agents_skill_keeps_folder_and_disables_path(
     codexmgr_home = codex_home.parent / "codexmgr-home"
     local_file = project / ".agents" / "skills" / "review" / "SKILL.md"
     local_file.parent.mkdir(parents=True)
-    local_file.write_text("# Local review\n", encoding="utf-8")
+    local_file.write_text(
+        _skill_text("review", "# Local review\n"),
+        encoding="utf-8",
+    )
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
 
     exit_code, stdout, stderr = run_cli_with_homes(
@@ -131,11 +149,11 @@ def test_disabling_local_only_agents_skill_keeps_folder_and_disables_path(
     assert "Disabled review" in stdout
     assert local_file.is_file()
     assert read_codex_config(project)["skills"]["config"] == [
-        {"path": str(local_file.resolve()), "enabled": False},
+        {"name": "review", "enabled": False},
     ]
 
 
-def test_enabling_codexmgr_home_skill_fails_when_target_is_unmanaged(
+def test_enabling_codexmgr_home_skill_fails_when_project_source_is_ambiguous(
     workspace,
     run_cli_with_homes,
 ):
@@ -145,7 +163,10 @@ def test_enabling_codexmgr_home_skill_fails_when_target_is_unmanaged(
     _write_skill(codexmgr_home, "review", "# Review\n")
     local_file = project / ".agents" / "skills" / "review" / "SKILL.md"
     local_file.parent.mkdir(parents=True)
-    local_file.write_text("# Local review\n", encoding="utf-8")
+    local_file.write_text(
+        _skill_text("review", "# Local review\n"),
+        encoding="utf-8",
+    )
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
 
     exit_code, stdout, stderr = run_cli_with_homes(
@@ -157,8 +178,12 @@ def test_enabling_codexmgr_home_skill_fails_when_target_is_unmanaged(
 
     assert exit_code == 1
     assert stdout == ""
-    assert "Refusing to overwrite unmanaged skill copy:" in stderr
-    assert local_file.read_text(encoding="utf-8") == "# Local review\n"
+    assert "Ambiguous skill reference: review" in stderr
+    assert str(local_file.resolve()) in stderr
+    assert local_file.read_text(encoding="utf-8") == _skill_text(
+        "review",
+        "# Local review\n",
+    )
 
 
 def _write_skill(home, name, content):
@@ -175,5 +200,18 @@ def _write_skill(home, name, content):
     skill_dir = home / "skills" / name
     skill_dir.mkdir(parents=True)
     skill_file = skill_dir / "SKILL.md"
-    skill_file.write_text(content, encoding="utf-8")
+    skill_file.write_text(_skill_text(name, content), encoding="utf-8")
     return skill_file
+
+
+def _skill_text(name, body):
+    """Return valid test skill content with the supplied Markdown body.
+
+    Args:
+        name: Declared skill name.
+        body: Markdown body following YAML frontmatter.
+
+    Returns:
+        Complete ``SKILL.md`` content.
+    """
+    return f"---\nname: {name}\ndescription: Test skill.\n---\n\n{body}"

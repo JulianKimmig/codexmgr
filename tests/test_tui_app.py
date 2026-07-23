@@ -285,7 +285,10 @@ def _write_skill(home, name):
     skill_dir = home / "skills" / name
     skill_dir.mkdir(parents=True)
     skill_file = skill_dir / "SKILL.md"
-    skill_file.write_text("# Skill\n", encoding="utf-8")
+    skill_file.write_text(
+        f"---\nname: {name}\ndescription: Test skill.\n---\n\n# Skill\n",
+        encoding="utf-8",
+    )
     return skill_file
 
 

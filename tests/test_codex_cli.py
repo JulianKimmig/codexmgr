@@ -402,8 +402,8 @@ skills = ["strict-skill"]
     assert captured["codex_home"] == str(project / ".codex" / ".runtime")
     assert captured["codexmgr_toml"] == ""
     assert captured["config"]["skills"]["config"] == [
-        {"path": str(base_skill.resolve()), "enabled": True},
-        {"path": str(strict_skill.resolve()), "enabled": True},
+        {"name": "base-skill", "enabled": True},
+        {"name": "strict-skill", "enabled": True},
     ]
     assert "# rules\nstrict\n" in captured["agents_md"]
     assert captured["agent"] == 'name = "agent"\n'
@@ -508,7 +508,10 @@ def _write_home_skill(codexmgr_home, name):
     skill_dir = codexmgr_home / "skills" / name
     skill_dir.mkdir(parents=True)
     skill_file = skill_dir / "SKILL.md"
-    skill_file.write_text("# Skill\n", encoding="utf-8")
+    skill_file.write_text(
+        f"---\nname: {name}\ndescription: Test skill.\n---\n\n# Skill\n",
+        encoding="utf-8",
+    )
     return skill_file
 
 

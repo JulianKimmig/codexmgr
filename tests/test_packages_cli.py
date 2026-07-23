@@ -84,9 +84,11 @@ skills = ["repo-rule-manager"]
     assert agent_file.read_text(encoding="utf-8") == 'name = "agent"\n'
     skill_file = project / ".agents" / "skills" / "repo-rule-manager" / "SKILL.md"
     assert read_codex_config(project)["skills"]["config"] == [
-        {"path": str(skill_file.resolve()), "enabled": True},
+        {"name": "repo-rule-manager", "enabled": True},
     ]
-    assert skill_file.read_text(encoding="utf-8") == "# Skill\n"
+    assert skill_file.read_text(encoding="utf-8") == _skill_text(
+        "repo-rule-manager",
+    )
     assert _read_project_hooks(project) == _expected_hooks("repo-rules")
     assert (
         project / ".codex" / "hooks" / "repo-rules" / "rules_context.py"
@@ -675,8 +677,20 @@ def _write_skill(codexmgr_home: Path, name: str) -> Path:
     skill_dir = codexmgr_home / "skills" / name
     skill_dir.mkdir(parents=True)
     skill_file = skill_dir / "SKILL.md"
-    skill_file.write_text("# Skill\n", encoding="utf-8")
+    skill_file.write_text(_skill_text(name), encoding="utf-8")
     return skill_file
+
+
+def _skill_text(name: str) -> str:
+    """Return valid reusable-skill test content.
+
+    Args:
+        name: Declared skill name.
+
+    Returns:
+        Complete ``SKILL.md`` content.
+    """
+    return f"---\nname: {name}\ndescription: Test skill.\n---\n\n# Skill\n"
 
 
 def _write_agent(codexmgr_home: Path, name: str) -> Path:

@@ -154,7 +154,11 @@ def test_skill_path_is_stored_as_given(workspace, run_cli, read_project_config):
     skill_path = str(project / "skills" / "review")
     run_cli(["setup"], project, codex_home)
 
-    exit_code, _, stderr = run_cli(["skill", "enable", skill_path], project, codex_home)
+    exit_code, _, stderr = run_cli(
+        ["skill", "enable", "--no-sync", skill_path],
+        project,
+        codex_home,
+    )
 
     assert exit_code == 0
     assert stderr == ""
@@ -299,22 +303,24 @@ def test_apply_missing_named_skill_writes_name_entry(
     assert read_lock(project)["skills"]["config"] == expected_entries
 
 
-def test_apply_missing_path_skill_writes_name_entry(
+def test_apply_missing_path_skill_fails(
     workspace,
     run_cli,
-    read_lock,
     read_codex_config,
 ):
-    """apply writes a name entry when a path-like skill cannot be resolved."""
+    """apply rejects a path-like skill that cannot be resolved."""
     project, codex_home = workspace
     missing_path = str(project / "skills" / "missing")
     run_cli(["setup"], project, codex_home)
-    run_cli(["skill", "disable", missing_path], project, codex_home)
+    run_cli(
+        ["skill", "disable", "--no-sync", missing_path],
+        project,
+        codex_home,
+    )
 
-    exit_code, _, stderr = run_cli(["apply"], project, codex_home)
+    exit_code, stdout, stderr = run_cli(["apply"], project, codex_home)
 
-    assert exit_code == 0
-    assert stderr == ""
-    expected_entries = [{"name": missing_path, "enabled": False}]
-    assert read_codex_config(project)["skills"]["config"] == expected_entries
-    assert read_lock(project)["skills"]["config"] == expected_entries
+    assert exit_code == 1
+    assert stdout == ""
+    assert stderr == f"Skill path not found: {missing_path}\n"
+    assert read_codex_config(project) == {}
