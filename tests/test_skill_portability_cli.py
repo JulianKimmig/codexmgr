@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from codexmgr.core.toml_io import write_toml_file
+
 
 def test_project_skill_uses_declared_name_selector(
     workspace,
@@ -181,13 +183,19 @@ def test_apply_migrates_legacy_absolute_copy_lock(
         '[skills]\nenabled = ["review"]\n',
         encoding="utf-8",
     )
-    (project / ".codex" / "codexmgr.lock").write_text(
-        "[skills]\n"
-        "[[skills.copies]]\n"
-        'name = "review"\n'
-        f'source = "{source_file.parent.resolve()}"\n'
-        f'target = "{target_file.parent.resolve()}"\n',
-        encoding="utf-8",
+    write_toml_file(
+        project / ".codex" / "codexmgr.lock",
+        {
+            "skills": {
+                "copies": [
+                    {
+                        "name": "review",
+                        "source": str(source_file.parent.resolve()),
+                        "target": str(target_file.parent.resolve()),
+                    },
+                ],
+            },
+        },
     )
 
     exit_code, _, stderr = run_cli_with_homes(
