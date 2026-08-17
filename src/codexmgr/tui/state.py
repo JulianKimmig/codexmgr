@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,12 +11,12 @@ from typing import Any
 from ..custom_agents.config import agent_lists, set_agent_state_in_config
 from ..custom_agents.sources import require_agent_source
 from ..core.paths import config_path, resolve_template
-from ..core.toml_io import dump_toml, load_optional_toml_file, write_toml_file
+from ..core.toml_io import dump_toml, load_optional_toml_file
 from ..hooks.config import hook_lists, set_hook_state_in_config
 from ..hooks.sources import require_hook_source
 from ..mcp.project import mcp_source_names, set_mcp_source_enabled_in_config
 from ..mcp.sources import require_mcp_source
-from ..project.apply import apply_project_config
+from ..project.copy_conflicts import CopyResolution
 from ..project.config import agents_md_sources, require_codex_dir, set_agents_md_sources
 from ..skills.config import _skill_lists, set_skill_state_in_config
 from .mutations import (
@@ -240,20 +240,26 @@ def load_staged_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> Stag
     )
 
 
-def save_staged_config(staged: StagedConfig, *, no_sync: bool) -> list[str]:
+def save_staged_config(
+    staged: StagedConfig,
+    *,
+    no_sync: bool,
+    copy_resolutions: Mapping[Path, CopyResolution] | None = None,
+) -> list[str]:
     """Write staged config and optionally apply generated files.
 
     Args:
         staged: Staged project configuration to persist.
         no_sync: Whether to skip apply after writing codexmgr.toml.
+        copy_resolutions: Complete TUI choices for current copy conflicts.
 
     Returns:
         User-facing status messages.
     """
-    write_toml_file(config_path(staged.cwd), staged.config)
-    messages = ["Saved project configuration"]
-    if not no_sync:
-        apply_project_config(staged.cwd, staged.codex_home, staged.codexmgr_home)
-        messages.append("Applied project Codex configuration")
-    staged.original_text = dump_toml(staged.config)
-    return messages
+    from .saving import save_staged_config as save_with_conflicts
+
+    return save_with_conflicts(
+        staged,
+        no_sync=no_sync,
+        copy_resolutions=copy_resolutions,
+    )

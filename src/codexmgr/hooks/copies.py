@@ -30,12 +30,16 @@ class HookCopyFile:
     """Expected file inside a managed hook copy.
 
     Attributes:
+        source: Canonical hook support file.
         path: Project-local copied file path.
         content: Expected byte content from the source file.
+        resource_kind: Resource family used for conflict validation.
     """
 
+    source: Path
     path: Path
     content: bytes
+    resource_kind: str = "hook"
 
 
 def validate_hook_copy_targets(
@@ -126,21 +130,26 @@ def expected_hook_copy_files(copies: list[HookCopy]) -> list[HookCopyFile]:
     for copy in copies:
         for source_file in source_hook_files(copy.source):
             target_file = copy.target / source_file.relative_to(copy.source)
-            files.append(HookCopyFile(target_file, source_file.read_bytes()))
+            files.append(
+                HookCopyFile(source_file, target_file, source_file.read_bytes()),
+            )
     return files
 
 
-def apply_hook_copy(copy: HookCopy) -> None:
+def apply_hook_copy(copy: HookCopy, skip_targets: set[Path] | None = None) -> None:
     """Overlay-copy one managed hook directory.
 
     Args:
         copy: Managed hook copy to refresh.
+        skip_targets: Exact target files to preserve for this apply.
     """
     for source_dir in _source_dirs(copy.source):
         target_dir = copy.target / source_dir.relative_to(copy.source)
         target_dir.mkdir(parents=True, exist_ok=True)
     for source_file in source_hook_files(copy.source):
         target_file = copy.target / source_file.relative_to(copy.source)
+        if skip_targets is not None and target_file.absolute() in skip_targets:
+            continue
         target_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_file, target_file)
 

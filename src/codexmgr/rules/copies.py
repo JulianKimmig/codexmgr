@@ -30,12 +30,16 @@ class RuleCopyFile:
     """Expected content for one managed rule copy.
 
     Attributes:
+        source: Canonical reusable rule file.
         path: Project-local target file.
         content: Expected bytes read from the source file.
+        resource_kind: Resource family used for conflict validation.
     """
 
+    source: Path
     path: Path
     content: bytes
+    resource_kind: str = "rule"
 
 
 def validate_rule_copy_targets(copies: list[RuleCopy], previous_lock: Mapping[str, Any]) -> None:
@@ -119,15 +123,21 @@ def expected_rule_copy_files(copies: list[RuleCopy]) -> list[RuleCopyFile]:
     Returns:
         Expected target file contents.
     """
-    return [RuleCopyFile(copy.target, copy.source.read_bytes()) for copy in copies]
+    return [
+        RuleCopyFile(copy.source, copy.target, copy.source.read_bytes())
+        for copy in copies
+    ]
 
 
-def apply_rule_copy(copy: RuleCopy) -> None:
+def apply_rule_copy(copy: RuleCopy, skip_targets: set[Path] | None = None) -> None:
     """Copy one source rule file to the project-local target.
 
     Args:
         copy: Managed rule copy to refresh.
+        skip_targets: Exact target files to preserve for this apply.
     """
+    if skip_targets is not None and copy.target.absolute() in skip_targets:
+        return
     copy.target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(copy.source, copy.target)
 

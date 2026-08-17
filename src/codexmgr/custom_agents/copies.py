@@ -30,12 +30,16 @@ class AgentCopyFile:
     """Expected file content for a managed custom-agent copy.
 
     Attributes:
+        source: Canonical custom-agent TOML file.
         path: Project-local copied file path.
         content: Expected byte content from the source file.
+        resource_kind: Resource family used for conflict validation.
     """
 
+    source: Path
     path: Path
     content: bytes
+    resource_kind: str = "custom-agent"
 
 
 def validate_agent_copy_targets(
@@ -122,15 +126,21 @@ def expected_agent_copy_files(copies: list[AgentCopy]) -> list[AgentCopyFile]:
     Returns:
         Expected copied files in stable order.
     """
-    return [AgentCopyFile(copy.target, copy.source.read_bytes()) for copy in copies]
+    return [
+        AgentCopyFile(copy.source, copy.target, copy.source.read_bytes())
+        for copy in copies
+    ]
 
 
-def apply_agent_copy(copy: AgentCopy) -> None:
+def apply_agent_copy(copy: AgentCopy, skip_targets: set[Path] | None = None) -> None:
     """Copy one managed custom-agent TOML file into the project.
 
     Args:
         copy: Managed custom-agent copy to refresh.
+        skip_targets: Exact target files to preserve for this apply.
     """
+    if skip_targets is not None and copy.target.absolute() in skip_targets:
+        return
     copy.target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(copy.source, copy.target)
 

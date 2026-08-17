@@ -147,6 +147,21 @@ The managed `AGENTS.md` block is:
 Manual content outside this block is preserved. If the block is missing,
 `codexmgr` appends it. If `AGENTS.md` is missing, `codexmgr` creates it.
 
+Known managed, source-backed skill files, reusable rule files, custom-agent
+TOML files, and hook support files receive additional local-edit protection. If
+one differs from its reusable source, interactive apply asks whether to keep
+the local file for this run, overwrite it from the source, update the shared
+source from the local file, or abort. Keeping local is temporary and prompts
+again on the next apply. Updating a source warns that other projects may share
+it and validates the local content when that resource has a validator.
+
+Generated and composed outputs do not use these choices: the managed
+`AGENTS.md` block, `.codex/config.toml`, merged `.codex/hooks.json`,
+`.codex/.gitignore`, and `.codex/codexmgr.lock` keep their existing generation
+behavior. Extra local files in skill and hook overlay directories remain
+untouched. The project-local managed copy conflicts contract records the full
+scope and implementation map.
+
 ## Project Configuration
 
 `.codex/codexmgr.toml` can opt into each resource type independently. A minimal
@@ -194,7 +209,8 @@ The project copy recorded for an enabled `$CODEXMGR_HOME` skill is recognized
 as a managed mirror and does not create a false collision on later applies.
 
 Enabled skills from `$CODEXMGR_HOME` are copied into `.agents/skills/<name>` on
-every apply. The copy overlays source files while preserving extra local files.
+every apply. Differing files in a known managed copy use the per-target
+conflict choices, while the overlay preserves extra local files.
 Path-like skill values can point to a `SKILL.md` file or a directory containing
 `SKILL.md`; a path-like value that does not exist is an error.
 
@@ -236,7 +252,8 @@ Enabled refs expand first, then disabled file or folder refs remove entries from
 that candidate set.
 
 First-time rule applies refuse to overwrite unmanaged `.rules/...` files. This
-keeps existing project-local rules from being replaced accidentally.
+keeps existing project-local rules from being replaced accidentally. The
+per-target conflict choices apply after a target is a known managed copy.
 
 ## Packages
 
@@ -296,7 +313,9 @@ in a collapsible folder tree.
 
 Changes are staged in memory while you navigate. Press `s` to save; the save
 writes `.codex/codexmgr.toml` once and runs `apply` once unless `--no-sync` was
-used.
+used. When apply finds a known managed direct-copy conflict, the TUI offers the
+same `keep-local`, `overwrite-local`, `update-source`, and `abort` choices as
+the interactive CLI.
 
 For resources with explicit enable and disable lists, `space` cycles the
 highlighted row through available, enabled, and disabled states. Package
@@ -345,6 +364,7 @@ Project lifecycle commands:
 ```bash
 codexmgr setup
 codexmgr apply
+codexmgr apply --resolve <target-path> <keep-local|overwrite-local|update-source>
 codexmgr apply --check
 codexmgr apply --diff
 codexmgr doctor
@@ -357,9 +377,25 @@ codexmgr status
 `apply` reads `.codex/codexmgr.toml`, resolves configured sources, writes
 managed project files, and refreshes generated state.
 
+For scripts and other noninteractive use, repeat `--resolve` with a target path
+and action for every known managed, source-backed copy conflict. For example:
+
+```bash
+codexmgr apply \
+  --resolve .agents/skills/review/SKILL.md keep-local \
+  --resolve .rules/python/testing.md update-source
+```
+
+The available actions are `keep-local`, `overwrite-local`, and
+`update-source`. These resolutions apply only to the current invocation; an
+unresolved target makes noninteractive apply fail before writes.
+
 `apply --check` exits with a failure if generated files are out of sync without
 writing them. `apply --diff` also avoids writing and prints unified diffs for
-the expected generated-file changes.
+the expected generated-file changes. Both modes remain read-only when a managed
+copy differs from its source. A noninteractive `apply` requires an explicit
+resolution for each conflicting target and fails before writes when any target
+is unresolved.
 
 The `.codex/.gitignore` managed block uses a default-ignore rule rather than a
 list of known runtime filenames. New caches, databases, sessions, and other

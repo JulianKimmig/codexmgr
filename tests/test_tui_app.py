@@ -272,6 +272,81 @@ async def test_tui_app_renders_nested_missing_rule_tree_node(
     assert missing_item.missing is True
 
 
+@pytest.mark.asyncio
+async def test_tui_save_presents_copy_conflict_and_keeps_local_for_one_run(
+    workspace,
+    run_cli_with_homes,
+):
+    """TUI save pauses for a conflict choice before applying managed copies."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    source = _write_skill(codexmgr_home, "review")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(
+        ["skill", "enable", "review"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+    target = project / ".agents" / "skills" / "review" / "SKILL.md"
+    local_content = target.read_text(encoding="utf-8").replace("# Skill", "# Local")
+    target.write_text(local_content, encoding="utf-8")
+    app = CodexMgrTui(
+        cwd=project,
+        codex_home=codex_home,
+        codexmgr_home=codexmgr_home,
+        no_sync=False,
+        show_diff=False,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("s")
+        await pilot.pause()
+        assert app.screen.__class__.__name__ == "CopyConflictScreen"
+        await pilot.press("k")
+        await pilot.pause()
+
+    assert target.read_text(encoding="utf-8") == local_content
+    assert source.read_text(encoding="utf-8") != local_content
+
+
+@pytest.mark.asyncio
+async def test_tui_save_can_update_the_shared_copy_source(
+    workspace,
+    run_cli_with_homes,
+):
+    """The TUI update-source choice promotes valid local managed content."""
+    project, codex_home = workspace
+    codexmgr_home = codex_home.parent / "codexmgr-home"
+    source = _write_skill(codexmgr_home, "review")
+    run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
+    run_cli_with_homes(
+        ["skill", "enable", "review"],
+        project,
+        codex_home,
+        codexmgr_home,
+    )
+    target = project / ".agents" / "skills" / "review" / "SKILL.md"
+    local_content = target.read_text(encoding="utf-8").replace("# Skill", "# Local")
+    target.write_text(local_content, encoding="utf-8")
+    app = CodexMgrTui(
+        cwd=project,
+        codex_home=codex_home,
+        codexmgr_home=codexmgr_home,
+        no_sync=False,
+        show_diff=False,
+    )
+
+    async with app.run_test() as pilot:
+        await pilot.press("s")
+        await pilot.pause()
+        await pilot.press("u")
+        await pilot.pause()
+
+    assert source.read_text(encoding="utf-8") == local_content
+    assert target.read_text(encoding="utf-8") == local_content
+
+
 def _write_skill(home, name):
     """Create a codexmgr-home skill for tests.
 

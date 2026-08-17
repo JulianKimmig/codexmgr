@@ -31,12 +31,16 @@ class SkillCopyFile:
     """Expected file inside a managed skill copy.
 
     Attributes:
+        source: Canonical source file path.
         path: Project-local copied file path.
         content: Expected byte content from the source file.
+        resource_kind: Resource family used for conflict validation.
     """
 
+    source: Path
     path: Path
     content: bytes
+    resource_kind: str = "skill"
 
 
 def validate_copy_targets(
@@ -147,21 +151,26 @@ def expected_copy_files(copies: list[SkillCopy]) -> list[SkillCopyFile]:
     for copy in copies:
         for source_file in _source_files(copy.source):
             target_file = copy.target / source_file.relative_to(copy.source)
-            files.append(SkillCopyFile(target_file, source_file.read_bytes()))
+            files.append(
+                SkillCopyFile(source_file, target_file, source_file.read_bytes()),
+            )
     return files
 
 
-def apply_skill_copy(copy: SkillCopy) -> None:
+def apply_skill_copy(copy: SkillCopy, skip_targets: set[Path] | None = None) -> None:
     """Overlay-copy one managed skill directory.
 
     Args:
         copy: Managed copy to refresh.
+        skip_targets: Exact target files to preserve for this apply.
     """
     for source_dir in _source_dirs(copy.source):
         target_dir = copy.target / source_dir.relative_to(copy.source)
         target_dir.mkdir(parents=True, exist_ok=True)
     for source_file in _source_files(copy.source):
         target_file = copy.target / source_file.relative_to(copy.source)
+        if skip_targets is not None and target_file.absolute() in skip_targets:
+            continue
         target_file.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_file, target_file)
 

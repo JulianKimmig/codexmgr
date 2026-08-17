@@ -54,6 +54,17 @@ def _add_apply_parser(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Print generated file diffs without writing them",
     )
+    apply.add_argument(
+        "--resolve",
+        action="append",
+        default=[],
+        nargs=2,
+        metavar=("TARGET", "ACTION"),
+        help=(
+            "Resolve one managed-copy conflict with keep-local, "
+            "overwrite-local, or update-source; repeat per target"
+        ),
+    )
 
 
 def _add_cd_parser(subparsers: argparse._SubParsersAction) -> None:

@@ -68,7 +68,15 @@ def test_apply_overlay_copy_overwrites_source_files_and_keeps_extra_files(
     source_file.write_text(_skill_text("review", "# Review v2\n"), encoding="utf-8")
     source_nested.write_text("source v2\n", encoding="utf-8")
     exit_code, _, stderr = run_cli_with_homes(
-        ["apply"],
+        [
+            "apply",
+            "--resolve",
+            ".agents/skills/review/SKILL.md",
+            "overwrite-local",
+            "--resolve",
+            ".agents/skills/review/notes/guide.md",
+            "overwrite-local",
+        ],
         project,
         codex_home,
         codexmgr_home,
