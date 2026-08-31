@@ -84,7 +84,7 @@ def resolve_project_hooks(
     enabled, disabled = hook_lists(project_config)
     existing = _load_existing_project_hooks(cwd)
     managed_configs, copies = _managed_hook_inputs(enabled, cwd, codexmgr_home)
-    validate_hook_copy_targets(copies, previous_lock)
+    validate_hook_copy_targets(copies, previous_lock, cwd, codexmgr_home)
 
     unmanaged = remove_managed_handlers(existing)
     merged = merge_hook_configs(existing, managed_configs)
@@ -96,7 +96,7 @@ def resolve_project_hooks(
         remove_hooks_json,
         copies,
         expected_hook_copy_files(copies),
-        obsolete_hook_copy_targets(previous_lock, copies),
+        obsolete_hook_copy_targets(previous_lock, copies, cwd, codexmgr_home),
         _lock_created_hooks_json(created, hooks_json),
         enabled,
         disabled,

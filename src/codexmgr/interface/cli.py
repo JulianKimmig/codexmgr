@@ -26,9 +26,11 @@ from ..custom_agents.cli import run_agents_command
 from ..mcp.cli import run_mcp_command
 from ..packages.cli import run_package_command
 from ..project.apply import apply_project_config, setup_project
+from ..project.copy_conflicts import parse_copy_resolutions
 from ..project.sync import check_project_sync
 from ..tui.cli import run_tui_command
 from .parser import build_parser
+from .copy_conflicts import build_cli_conflict_resolver, write_source_update_warning
 
 
 def main(
@@ -37,6 +39,7 @@ def main(
     cwd: Path | None = None,
     codex_home: Path | None = None,
     codexmgr_home: Path | None = None,
+    stdin: TextIO | None = None,
     stdout: TextIO | None = None,
     stderr: TextIO | None = None,
 ) -> int:
@@ -48,12 +51,14 @@ def main(
         codex_home: Optional Codex home used instead of CODEX_HOME or ~/.codex.
         codexmgr_home: Optional codexmgr home used instead of CODEXMGR_HOME
             or ~/.codexmgr.
+        stdin: Optional stream for interactive conflict decisions.
         stdout: Optional stream for normal command output.
         stderr: Optional stream for command errors.
 
     Returns:
         A process-style exit code where zero means success.
     """
+    input_stream = stdin if stdin is not None else sys.stdin
     out = stdout if stdout is not None else sys.stdout
     err = stderr if stderr is not None else sys.stderr
     raw_argv = list(sys.argv[1:] if argv is None else argv)
@@ -65,7 +70,15 @@ def main(
     )
 
     try:
-        return _dispatch(args, project_dir, codex_dir, codexmgr_dir, out, err)
+        return _dispatch(
+            args,
+            project_dir,
+            codex_dir,
+            codexmgr_dir,
+            input_stream,
+            out,
+            err,
+        )
     except CommandError as exc:
         err.write(f"{exc}\n")
         return 1
@@ -99,6 +112,7 @@ def _dispatch(
     cwd: Path,
     codex_home: Path,
     codexmgr_home: Path,
+    stdin: TextIO,
     stdout: TextIO,
     stderr: TextIO,
 ) -> int:
@@ -109,6 +123,7 @@ def _dispatch(
         cwd: Project directory for project-local operations.
         codex_home: Global Codex home for resolving named skills.
         codexmgr_home: codexmgr home for resolving named AGENTS.md templates.
+        stdin: Stream for interactive conflict decisions.
         stdout: Stream for command output.
         stderr: Stream for command warnings.
 
@@ -122,6 +137,8 @@ def _dispatch(
         return 0
 
     if args.command == "apply":
+        if args.resolve and (args.check or args.diff):
+            raise CommandError("--resolve cannot be combined with --check or --diff")
         if args.check or args.diff:
             return check_project_sync(
                 cwd,
@@ -130,7 +147,18 @@ def _dispatch(
                 stdout,
                 show_diff=args.diff,
             )
-        apply_project_config(cwd, codex_home, codexmgr_home)
+        resolutions = parse_copy_resolutions(cwd, args.resolve)
+        apply_project_config(
+            cwd,
+            codex_home,
+            codexmgr_home,
+            copy_resolutions=resolutions,
+            conflict_resolver=build_cli_conflict_resolver(stdin, stdout),
+            source_update_reporter=lambda conflict: write_source_update_warning(
+                conflict,
+                stdout,
+            ),
+        )
         stdout.write("Applied project Codex configuration\n")
         return 0
 

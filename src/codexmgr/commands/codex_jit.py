@@ -115,7 +115,7 @@ def run_with_jit_overlay(
         codexmgr_home,
     )
     snapshots = snapshot_paths(_state_paths(overlay_state))
-    apply_project_state(overlay_state)
+    apply_project_state(overlay_state, cwd=cwd)
     try:
         return run_codex(cwd, request.codex_args)
     finally:

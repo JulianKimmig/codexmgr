@@ -51,13 +51,12 @@ def test_hooks_enable_applies_and_copies_bundle(
     """hooks enable stores config, merges hooks.json, copies files, and locks state."""
     project, codex_home = workspace
     codexmgr_home = codex_home.parent / "codexmgr-home"
-    source_file = _write_hook_bundle(
+    _write_hook_bundle(
         codexmgr_home,
         "rules",
         files={"rules_context.py": "print('rules')\n"},
     )
-    target_dir = project / ".codex" / "hooks" / "rules"
-    target_file = target_dir / "rules_context.py"
+    target_file = project / ".codex" / "hooks" / "rules" / "rules_context.py"
 
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
     exit_code, stdout, stderr = run_cli_with_homes(
@@ -83,8 +82,8 @@ def test_hooks_enable_applies_and_copies_bundle(
         "copies": [
             {
                 "name": "rules",
-                "source": str(source_file.parent.resolve()),
-                "target": str(target_dir.resolve()),
+                "source": "codexmgr_home",
+                "target": ".codex/hooks/rules",
             },
         ],
     }

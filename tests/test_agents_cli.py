@@ -44,7 +44,7 @@ def test_agents_enable_applies_and_copies_agent(
     """agents enable stores config, copies the TOML file, and locks ownership."""
     project, codex_home = workspace
     codexmgr_home = codex_home.parent / "codexmgr-home"
-    source = _write_agent(codexmgr_home, "reviewer", 'name = "reviewer"\n')
+    _write_agent(codexmgr_home, "reviewer", 'name = "reviewer"\n')
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
 
     exit_code, stdout, stderr = run_cli_with_homes(
@@ -69,8 +69,8 @@ def test_agents_enable_applies_and_copies_agent(
         "copies": [
             {
                 "name": "reviewer",
-                "source": str(source.resolve()),
-                "target": str(target.resolve()),
+                "source": "codexmgr_home",
+                "target": ".codex/agents/reviewer.toml",
             },
         ],
     }

@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..core.errors import CommandError
+from ..core.paths import CODEXMGR_HOME_SOURCE
 
 CODEX_HOME_SOURCE = "codex_home"
-CODEXMGR_HOME_SOURCE = "codexmgr_home"
 LOCAL_SOURCE = "local"
 PATH_SOURCE = "path"
 

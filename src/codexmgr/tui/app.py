@@ -20,10 +20,11 @@ from .panels import detail_text, status_text, title_text
 from .rendering import APP_CSS, NAV_LABELS, TUI_BINDINGS, selection_for_item
 from .rule_tree import populate_rule_tree
 from .sections import cycle_section_state, items_for_section, set_section_selected
-from .state import StagedConfig, load_staged_config, save_staged_config
+from .save_flow import TuiSaveFlowMixin
+from .state import StagedConfig, load_staged_config
 
 
-class CodexMgrTui(App[int]):
+class CodexMgrTui(TuiSaveFlowMixin, App[int]):
     """Interactive codexmgr project manager.
 
     Args:
@@ -113,20 +114,6 @@ class CodexMgrTui(App[int]):
         """
         self.staged = load_staged_config(self.cwd, self.codex_home, self.codexmgr_home)
         self._status = "Reloaded project configuration"
-        self._refresh_view()
-
-    def action_save(self) -> None:
-        """Save staged changes and optionally apply project outputs.
-
-        Returns:
-            None.
-        """
-        try:
-            messages = save_staged_config(self.staged, no_sync=self.no_sync)
-            self.staged = load_staged_config(self.cwd, self.codex_home, self.codexmgr_home)
-            self._status = " | ".join(messages)
-        except CommandError as exc:
-            self._status = f"ERROR {exc}"
         self._refresh_view()
 
     def action_quit(self) -> None:

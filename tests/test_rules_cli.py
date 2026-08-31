@@ -125,13 +125,13 @@ def test_rules_enable_folder_recursively_copies_and_locks_files(
     assert read_lock(project)["rules"]["copies"] == [
         {
             "relative_path": "react/components.md",
-            "source": str((codexmgr_home / "rules" / "react" / "components.md").resolve()),
-            "target": str((project / ".rules" / "react" / "components.md").resolve()),
+            "source": "codexmgr_home",
+            "target": ".rules/react/components.md",
         },
         {
             "relative_path": "react/materials/colors.md",
-            "source": str((codexmgr_home / "rules" / "react" / "materials" / "colors.md").resolve()),
-            "target": str((project / ".rules" / "react" / "materials" / "colors.md").resolve()),
+            "source": "codexmgr_home",
+            "target": ".rules/react/materials/colors.md",
         },
     ]
 
