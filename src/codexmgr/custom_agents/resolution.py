@@ -62,11 +62,11 @@ def resolve_project_agents(
     """
     enabled, disabled = agent_lists(project_config)
     copies = _managed_agent_copies(enabled, cwd, codexmgr_home)
-    validate_agent_copy_targets(copies, previous_lock)
+    validate_agent_copy_targets(copies, previous_lock, cwd, codexmgr_home)
     return AgentResolution(
         copies,
         expected_agent_copy_files(copies),
-        obsolete_agent_copy_targets(previous_lock, copies),
+        obsolete_agent_copy_targets(previous_lock, copies, cwd, codexmgr_home),
         enabled,
         disabled,
     )

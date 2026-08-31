@@ -5,6 +5,8 @@ from pathlib import Path
 
 from .errors import CommandError
 
+CODEXMGR_HOME_SOURCE = "codexmgr_home"
+
 
 def global_codex_dir() -> Path:
     """Return the Codex home directory.

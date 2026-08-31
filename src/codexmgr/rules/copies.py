@@ -3,11 +3,13 @@
 import shutil
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ..core.errors import CommandError
+from ..core.paths import CODEXMGR_HOME_SOURCE
 from ..core.toml_io import plain_toml_value
+from .sources import project_rules_dir, rules_source_root
 
 
 @dataclass(frozen=True)
@@ -42,24 +44,37 @@ class RuleCopyFile:
     resource_kind: str = "rule"
 
 
-def validate_rule_copy_targets(copies: list[RuleCopy], previous_lock: Mapping[str, Any]) -> None:
+def validate_rule_copy_targets(
+    copies: list[RuleCopy],
+    previous_lock: Mapping[str, Any],
+    cwd: Path,
+    codexmgr_home: Path,
+) -> None:
     """Reject first-time copies over unmanaged target files.
 
     Args:
         copies: Current managed rule copies.
         previous_lock: Existing codexmgr lock data.
+        cwd: Current project root used to rebind portable targets.
+        codexmgr_home: Current manager home used to rebind portable sources.
     """
-    previous = previous_rule_copies(previous_lock)
+    previous = previous_rule_copies(previous_lock, cwd, codexmgr_home)
     for copy in copies:
         if copy.relative_path not in previous and copy.target.exists():
             raise CommandError(f"Refusing to overwrite unmanaged rule file: {copy.target}")
 
 
-def previous_rule_copies(previous_lock: Mapping[str, Any]) -> dict[str, RuleCopy]:
+def previous_rule_copies(
+    previous_lock: Mapping[str, Any],
+    cwd: Path,
+    codexmgr_home: Path,
+) -> dict[str, RuleCopy]:
     """Read managed rule-copy metadata from lock data.
 
     Args:
         previous_lock: Parsed .codex/codexmgr.lock data.
+        cwd: Current project root used to rebind portable targets.
+        codexmgr_home: Current manager home used to rebind portable sources.
 
     Returns:
         Previous rule copies keyed by relative path.
@@ -69,7 +84,7 @@ def previous_rule_copies(previous_lock: Mapping[str, Any]) -> dict[str, RuleCopy
         raise CommandError("codexmgr.lock rules.copies must be a list")
     copies: dict[str, RuleCopy] = {}
     for raw_copy in raw_copies:
-        copy = _copy_from_lock_entry(raw_copy)
+        copy = _copy_from_lock_entry(raw_copy, cwd, codexmgr_home)
         copies[copy.relative_path] = copy
     return copies
 
@@ -77,12 +92,16 @@ def previous_rule_copies(previous_lock: Mapping[str, Any]) -> dict[str, RuleCopy
 def obsolete_rule_copy_targets(
     previous_lock: Mapping[str, Any],
     current_copies: list[RuleCopy],
+    cwd: Path,
+    codexmgr_home: Path,
 ) -> list[Path]:
     """Return previous managed targets absent from current state.
 
     Args:
         previous_lock: Existing codexmgr lock data.
         current_copies: Current managed rule copies.
+        cwd: Current project root used to rebind portable targets.
+        codexmgr_home: Current manager home used to rebind portable sources.
 
     Returns:
         Sorted obsolete file targets.
@@ -90,7 +109,11 @@ def obsolete_rule_copy_targets(
     current = {copy.relative_path for copy in current_copies}
     return sorted(
         copy.target
-        for relative_path, copy in previous_rule_copies(previous_lock).items()
+        for relative_path, copy in previous_rule_copies(
+            previous_lock,
+            cwd,
+            codexmgr_home,
+        ).items()
         if relative_path not in current
     )
 
@@ -107,8 +130,8 @@ def rule_copy_lock_entries(copies: list[RuleCopy]) -> list[dict[str, str]]:
     return [
         {
             "relative_path": copy.relative_path,
-            "source": str(copy.source.resolve()),
-            "target": str(copy.target.resolve()),
+            "source": CODEXMGR_HOME_SOURCE,
+            "target": f".rules/{copy.relative_path}",
         }
         for copy in copies
     ]
@@ -153,11 +176,17 @@ def remove_rule_copy_target(target: Path) -> None:
     _prune_empty_dirs(target.parent)
 
 
-def _copy_from_lock_entry(raw_copy: Any) -> RuleCopy:
+def _copy_from_lock_entry(
+    raw_copy: Any,
+    cwd: Path,
+    codexmgr_home: Path,
+) -> RuleCopy:
     """Parse one rule copy lock entry.
 
     Args:
         raw_copy: Plain lock entry value.
+        cwd: Current project root used to rebind the target.
+        codexmgr_home: Current manager home used to rebind the source.
 
     Returns:
         Parsed rule copy.
@@ -175,7 +204,22 @@ def _copy_from_lock_entry(raw_copy: Any) -> RuleCopy:
         raise CommandError(
             "codexmgr.lock rules.copies entries must include relative_path, source, and target"
         )
-    return RuleCopy(relative_path, Path(source), Path(target))
+    portable_path = PurePosixPath(relative_path)
+    if (
+        relative_path in {"", ".", ".."}
+        or "\\" in relative_path
+        or portable_path.is_absolute()
+        or portable_path.as_posix() != relative_path
+        or any(part == ".." for part in portable_path.parts)
+    ):
+        raise CommandError(
+            "codexmgr.lock rules.copies entries must use a safe relative_path"
+        )
+    return RuleCopy(
+        relative_path,
+        rules_source_root(codexmgr_home) / relative_path,
+        project_rules_dir(cwd) / relative_path,
+    )
 
 
 def _prune_empty_dirs(path: Path) -> None:

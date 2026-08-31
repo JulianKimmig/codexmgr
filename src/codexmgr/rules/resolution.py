@@ -63,11 +63,11 @@ def resolve_project_rules(
     """
     enabled, disabled = rule_lists(project_config)
     copies = _selected_copies(enabled, disabled, cwd, codexmgr_home)
-    validate_rule_copy_targets(copies, previous_lock)
+    validate_rule_copy_targets(copies, previous_lock, cwd, codexmgr_home)
     return RuleResolution(
         copies,
         expected_rule_copy_files(copies),
-        obsolete_rule_copy_targets(previous_lock, copies),
+        obsolete_rule_copy_targets(previous_lock, copies, cwd, codexmgr_home),
         enabled,
         disabled,
     )

@@ -223,10 +223,12 @@ resolved directly from `$CODEX_HOME` and explicit path references keep absolute
 requested. Missing bare names remain name-based entries so Codex can resolve
 them later from another installed source.
 
-Managed skill-copy lock entries use the logical source `codexmgr_home` and a
-project-relative `.agents/skills/<name>` target. Apply accepts legacy absolute
-copy entries and rewrites them in this portable form, so moving or cloning a
-project does not churn generated skill config or lock state.
+Managed skill, custom-agent, hook, and rule copy-lock entries use the logical
+source `codexmgr_home` and project-relative targets. Apply derives their paths
+from the current `$CODEXMGR_HOME` and project root, accepts legacy absolute copy
+entries, and rewrites them in portable form. Moving or cloning a project
+therefore does not churn generated lock state or direct cleanup into an old
+clone.
 
 Named custom agents resolve from `$CODEXMGR_HOME/agents/<name>.toml`. Enabled
 agents are copied into `.codex/agents/<name>.toml`; disabled agents remove the
