@@ -1,6 +1,7 @@
 """Package-related staged configuration helpers for the TUI."""
 
 from collections.abc import MutableMapping
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,7 @@ from ..packages.config import PackageConfig, PackageEntries, load_package_config
 from ..packages.mutation import apply_package_entries_to_config
 from ..project.config import agents_md_sources, set_agents_md_sources
 from ..skills.groups import set_skill_references_state, skill_reference_states
+from ..guides.config import guide_reference_states, remove_guide
 from .mutations import (
     package_checks,
     remove_agent,
@@ -187,6 +189,10 @@ def _clear_package_entries(
         codex_home: Codex skill store.
         codexmgr_home: Manager skill store.
     """
+    target = config
+    config = deepcopy(config)
+    for guide in entries.guides:
+        remove_guide(config, guide, codexmgr_home)
     if entries.skills:
         set_skill_references_state(config, entries.skills, "available", cwd, codex_home, codexmgr_home)
     if entries.agentsmd:
@@ -201,6 +207,7 @@ def _clear_package_entries(
         remove_hook(config, hook)
     for rule in entries.rules:
         remove_rule(config, rule)
+    target.update(config)
 
 
 def _entries_state(
@@ -220,7 +227,10 @@ def _entries_state(
         Aggregate package state based on expanded skill identities and resources.
     """
     states = skill_reference_states(config, entries.skills, cwd, codex_home, codexmgr_home)
-    return _state_from_checks(package_checks(config, entries, skill_states=states))
+    return _state_from_checks([
+        *package_checks(config, entries, skill_states=states),
+        *guide_reference_states(config, entries.guides, codexmgr_home),
+    ])
 
 
 def _root_entries(package: PackageConfig) -> PackageEntries:
@@ -238,6 +248,7 @@ def _root_entries(package: PackageConfig) -> PackageEntries:
         package.hooks,
         package.skills,
         package.rules,
+        package.guides,
     )
 
 

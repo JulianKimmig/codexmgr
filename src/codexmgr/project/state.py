@@ -6,6 +6,7 @@ from typing import Any
 
 from ..custom_agents.copies import AgentCopy
 from ..rules.copies import RuleCopy
+from ..guides.copies import GuideCopy
 from ..skills.copies import SkillCopy
 
 
@@ -38,6 +39,9 @@ class ProjectBuild:
         rule_copies: Managed reusable rule files to copy on apply.
         obsolete_rule_copy_targets: Previous managed rule files to remove.
         obsolete_file_targets: Previously generated files to remove.
+        guide_copies: Managed reusable guide document copies.
+        obsolete_guide_copy_targets: Previously owned guide files to remove.
+        guide_root: Actual project guide directory for cleanup and snapshots.
     """
 
     files: list[GeneratedFile]
@@ -51,3 +55,6 @@ class ProjectBuild:
     rule_copies: list[RuleCopy]
     obsolete_rule_copy_targets: list[Path]
     obsolete_file_targets: list[Path]
+    guide_copies: list[GuideCopy]
+    obsolete_guide_copy_targets: list[Path]
+    guide_root: Path

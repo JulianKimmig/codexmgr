@@ -23,6 +23,7 @@ from ..rules.resolution import (
     resolve_project_rules,
 )
 from ..skills.resolution import SkillResolution, resolve_project_skills
+from ..guides.resolution import GuideResolution, resolve_project_guides
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ class ProjectResolution:
         hooks: Resolved hook state.
         rules: Resolved reusable-rule state.
         mcp: Resolved MCP state.
+        guides: Resolved reusable guide selection and owned copies.
     """
 
     locked_agents_md: dict[str, Any]
@@ -44,6 +46,7 @@ class ProjectResolution:
     hooks: HookResolution
     rules: RuleResolution
     mcp: McpResolution
+    guides: GuideResolution
 
 
 def resolve_project_components(
@@ -72,6 +75,7 @@ def resolve_project_components(
         _resolve_hooks(config, cwd, codexmgr_home, previous_lock),
         _resolve_rules(config, cwd, codexmgr_home, previous_lock),
         _resolve_mcp(config, codexmgr_home),
+        resolve_project_guides(config, cwd, codexmgr_home, previous_lock),
     )
 
 

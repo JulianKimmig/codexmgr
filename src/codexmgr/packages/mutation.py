@@ -1,6 +1,7 @@
 """Apply package enable and disable mutations to project config."""
 
 from collections.abc import MutableMapping
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,8 @@ from ..hooks.config import set_hook_state_in_config
 from ..hooks.sources import require_hook_source
 from ..project.config import agents_md_sources, require_codex_dir, set_agents_md_sources
 from ..rules.config import set_rule_state_in_config
+from ..guides.config import set_guide_state_in_config
+from ..guides.sources import canonical_guide_ref
 from ..rules.sources import canonical_rule_ref
 from ..skills.groups import set_skill_references_state
 from .config import PackageEntries, load_package_config, selected_package_entries
@@ -116,6 +119,10 @@ def apply_package_entries_to_config(
         cwd: Project root used to expand skill groups.
         codex_home: Codex skill store supplied by the invoking workflow.
     """
+    target = config
+    config = deepcopy(config)
+    for guide in entries.guides:
+        set_guide_state_in_config(config, guide, codexmgr_home, enabled=enabled)
     if entries.skills:
         set_skill_references_state(
             config, entries.skills, "enabled" if enabled else "disabled",
@@ -131,6 +138,7 @@ def apply_package_entries_to_config(
         set_agent_state_in_config(config, agent, enabled=enabled)
     for hook in entries.hooks:
         set_hook_state_in_config(config, hook, enabled=enabled)
+    target.update(config)
 
 
 def selected_entries_for_package(
@@ -210,6 +218,8 @@ def _validate_enable_sources(
         require_hook_source(hook, codexmgr_home)
     for rule in entries.rules:
         canonical_rule_ref(rule, codexmgr_home)
+    for guide in entries.guides:
+        canonical_guide_ref(guide, codexmgr_home)
 
 
 def _add_agentsmd(config: MutableMapping[str, Any], references: list[str]) -> None:

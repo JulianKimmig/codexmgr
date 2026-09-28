@@ -236,6 +236,7 @@ def build_project_state_from_config(
         resolution.hooks,
         resolution.rules,
         resolution.mcp,
+        resolution.guides,
     )
     files = build_generated_files(
         cwd,
@@ -252,6 +253,7 @@ def build_project_state_from_config(
             *resolution.hooks.copy_files,
             *resolution.agents.copy_files,
             *resolution.rules.copy_files,
+            *resolution.guides.copy_files,
         ],
         resolution.skills.copies,
         resolution.skills.obsolete_copy_targets,
@@ -262,6 +264,9 @@ def build_project_state_from_config(
         resolution.rules.copies,
         resolution.rules.obsolete_copy_targets,
         obsolete_generated_files(cwd, resolution.hooks),
+        resolution.guides.copies,
+        resolution.guides.obsolete_copy_targets,
+        cwd / ".guides",
     )
 
 

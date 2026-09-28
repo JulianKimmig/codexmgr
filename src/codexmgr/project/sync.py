@@ -7,7 +7,7 @@ from typing import TextIO
 
 from .apply import build_project_state, build_project_state_from_config
 from .state import GeneratedFile, ProjectBuild
-from ..skills.copies import SkillCopyFile
+from .copy_conflicts import ManagedCopyFile
 
 
 @dataclass(frozen=True)
@@ -90,7 +90,7 @@ def diffs_for_project_state(cwd: Path, state: ProjectBuild) -> list[FileDiff]:
         diff = _copy_file_diff(cwd, copy_file)
         if diff is not None:
             diffs.append(diff)
-    for obsolete_file in state.obsolete_file_targets:
+    for obsolete_file in [*state.obsolete_file_targets, *state.obsolete_guide_copy_targets]:
         diff = _obsolete_file_diff(cwd, obsolete_file)
         if diff is not None:
             diffs.append(diff)
@@ -195,8 +195,8 @@ def _text_file_diff(cwd: Path, generated_file: GeneratedFile) -> FileDiff | None
     )
 
 
-def _copy_file_diff(cwd: Path, copy_file: SkillCopyFile) -> FileDiff | None:
-    """Build a diff for one managed skill-copy file.
+def _copy_file_diff(cwd: Path, copy_file: ManagedCopyFile) -> FileDiff | None:
+    """Build a diff for one managed source-backed copy file.
 
     Args:
         cwd: Project directory used as display root.
@@ -233,8 +233,8 @@ def _obsolete_file_diff(cwd: Path, path: Path) -> FileDiff | None:
     """
     if not path.exists():
         return None
-    current = _read_existing_text(path)
-    return FileDiff(path, _display_path(cwd, path), True, current, "")
+    current, binary = _decode_bytes(path.read_bytes())
+    return FileDiff(path, _display_path(cwd, path), True, current, "", binary)
 
 
 def _decode_bytes(content: bytes) -> tuple[str, bool]:

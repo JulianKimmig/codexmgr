@@ -27,11 +27,13 @@ from .mutations import (
     remove_skill,
 )
 from .staged_packages import PackageStageMixin
+from .staged_guides import GuideStageMixin
+from ..guides.config import guide_lists
 from ..rules.config import rule_lists, set_rule_state_in_config
 
 
 @dataclass
-class StagedConfig(PackageStageMixin):
+class StagedConfig(PackageStageMixin, GuideStageMixin):
     """Mutable in-memory project configuration.
 
     Attributes:
@@ -45,6 +47,7 @@ class StagedConfig(PackageStageMixin):
         original_hooks: Hook names configured when the stage was loaded.
         original_rules: Rule refs configured when the stage was loaded.
         original_mcp_sources: MCP source names configured when the stage was loaded.
+        original_guides: Guide selectors configured when the stage was loaded.
     """
 
     cwd: Path
@@ -57,6 +60,7 @@ class StagedConfig(PackageStageMixin):
     original_hooks: frozenset[str]
     original_rules: frozenset[str]
     original_mcp_sources: frozenset[str]
+    original_guides: frozenset[str]
 
     def dirty(self) -> bool:
         """Return whether staged config differs from the loaded file.
@@ -226,6 +230,7 @@ def load_staged_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> Stag
     enabled_hooks, disabled_hooks = hook_lists(config)
     enabled_rules, disabled_rules = rule_lists(config)
     mcp_sources = mcp_source_names(config)
+    enabled_guides, disabled_guides = guide_lists(config)
     return StagedConfig(
         cwd,
         codex_home,
@@ -237,6 +242,7 @@ def load_staged_config(cwd: Path, codex_home: Path, codexmgr_home: Path) -> Stag
         frozenset([*enabled_hooks, *disabled_hooks]),
         frozenset([*enabled_rules, *disabled_rules]),
         frozenset(mcp_sources),
+        frozenset([*enabled_guides, *disabled_guides]),
     )
 
 

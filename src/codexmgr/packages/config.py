@@ -9,7 +9,7 @@ from ..core.errors import CommandError
 from ..core.toml_io import load_toml_file, plain_toml_value
 from .sources import require_package_config
 
-SUPPORTED_KEYS = ("agentsmd", "agents", "hooks", "skills", "rules")
+SUPPORTED_KEYS = ("agentsmd", "agents", "hooks", "skills", "rules", "guides")
 TOP_LEVEL_KEYS = (*SUPPORTED_KEYS, "profiles")
 
 
@@ -23,6 +23,7 @@ class PackageEntries:
         hooks: Hook bundle names to enable or disable.
         skills: Skill references to enable or disable.
         rules: Reusable rule refs to enable or disable.
+        guides: Persistent guide file or folder selections.
     """
 
     agentsmd: list[str]
@@ -30,6 +31,7 @@ class PackageEntries:
     hooks: list[str]
     skills: list[str]
     rules: list[str]
+    guides: list[str]
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,7 @@ class PackageConfig:
         hooks: Hook bundle names to enable or disable.
         skills: Skill references to enable or disable.
         rules: Reusable rule refs to enable or disable.
+        guides: Persistent guide file or folder selections.
         profiles: Optional named profile entries keyed by profile name.
     """
 
@@ -52,6 +55,7 @@ class PackageConfig:
     hooks: list[str]
     skills: list[str]
     rules: list[str]
+    guides: list[str]
     profiles: dict[str, PackageEntries]
 
 
@@ -90,7 +94,7 @@ def parse_package_config(
     if not any(key in data for key in TOP_LEVEL_KEYS):
         raise CommandError(
             "Package config must include agentsmd, agents, hooks, skills, "
-            f"rules, or profiles: {path}"
+            f"rules, guides, or profiles: {path}"
         )
     return PackageConfig(
         name=name,
@@ -99,6 +103,7 @@ def parse_package_config(
         hooks=_string_list(data, "hooks", path),
         skills=_string_list(data, "skills", path),
         rules=_string_list(data, "rules", path),
+        guides=_string_list(data, "guides", path),
         profiles=_profiles(data, path),
     )
 
@@ -121,6 +126,7 @@ def selected_package_entries(
     hooks = list(package.hooks)
     skills = list(package.skills)
     rules = list(package.rules)
+    guides = list(package.guides)
     for profile_name in profile_names:
         profile = package.profiles.get(profile_name)
         if profile is None:
@@ -132,12 +138,14 @@ def selected_package_entries(
         hooks = _append_unique(hooks, profile.hooks)
         skills = _append_unique(skills, profile.skills)
         rules = _append_unique(rules, profile.rules)
+        guides = _append_unique(guides, profile.guides)
     return PackageEntries(
         agentsmd=agentsmd,
         agents=agents,
         hooks=hooks,
         skills=skills,
         rules=rules,
+        guides=guides,
     )
 
 
@@ -169,6 +177,7 @@ def _profiles(data: Mapping[str, Any], path: Path) -> dict[str, PackageEntries]:
             hooks=_string_list(table, "hooks", path),
             skills=_string_list(table, "skills", path),
             rules=_string_list(table, "rules", path),
+            guides=_string_list(table, "guides", path),
         )
     return parsed
 

@@ -8,8 +8,10 @@ from .mutations import remove_agent, remove_hook, remove_rule
 from .package_refs import parse_package_value
 from .package_selection import set_package_selection
 from .state import StagedConfig
+from .guide_items import guide_items
+from ..guides.config import remove_guide
 
-TRI_STATE_SECTIONS = {"skills", "hooks", "agents", "rules", "packages"}
+TRI_STATE_SECTIONS = {"skills", "hooks", "agents", "rules", "guides", "packages"}
 
 
 def items_for_section(staged: StagedConfig, section: str) -> tuple[list[ManagedItem], str]:
@@ -32,6 +34,8 @@ def items_for_section(staged: StagedConfig, section: str) -> tuple[list[ManagedI
         return agent_items(staged), ""
     if section == "rules":
         return rule_items(staged), ""
+    if section == "guides":
+        return guide_items(staged), ""
     if section == "packages":
         return package_items(staged), ""
     if section == "mcp":
@@ -61,6 +65,8 @@ def set_section_selected(staged: StagedConfig, section: str, value: str, selecte
         staged.set_agent_selected(value, selected)
     elif section == "rules":
         staged.set_rule_selected(value, selected)
+    elif section == "guides":
+        staged.set_guide_selected(value, selected)
     elif section == "packages":
         set_package_selection(staged, value, selected)
     elif section == "mcp":
@@ -113,6 +119,11 @@ def set_section_state(
         _set_agent_state(staged, value, state)
     elif section == "rules":
         _set_rule_state(staged, value, state)
+    elif section == "guides":
+        if state == "available":
+            remove_guide(staged.config, value, staged.codexmgr_home)
+        else:
+            staged.set_guide_enabled(value, state == "enabled")
     elif section == "packages":
         _set_package_state(staged, value, state)
     elif section == "mcp":

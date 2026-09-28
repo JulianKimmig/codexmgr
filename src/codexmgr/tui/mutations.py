@@ -15,6 +15,7 @@ from ..packages.config import PackageEntries
 from ..project.config import agents_md_sources
 from ..rules.config import rule_lists
 from ..rules.sources import canonical_rule_ref
+from ..guides.sources import canonical_guide_ref
 from ..skills.config import _skill_lists
 
 
@@ -38,6 +39,8 @@ def validate_package_enable(
         require_hook_source(hook, codexmgr_home)
     for rule in entries.rules:
         canonical_rule_ref(rule, codexmgr_home)
+    for guide in entries.guides:
+        canonical_guide_ref(guide, codexmgr_home)
 
 
 def package_checks(

@@ -135,6 +135,7 @@ file for you, and you can also edit it by hand when that is clearer.
 - `.codex/agents/<name>.toml`: copied custom-agent definitions
 - `.agents/skills/<name>`: copied manager-home skills
 - `.rules/<path>`: copied reusable rule files
+- `.guides/<path>`: copied reusable guide documents and supporting assets
 - `AGENTS.md`: project instructions with only the generated block replaced
 
 The managed `AGENTS.md` block is:
@@ -286,9 +287,47 @@ First-time rule applies refuse to overwrite unmanaged `.rules/...` files. This
 keeps existing project-local rules from being replaced accidentally. The
 per-target conflict choices apply after a target is a known managed copy.
 
+## Guides
+
+Guides are reusable documents stored under `$CODEXMGR_HOME/guides/`. Select any
+folder depth or an individual file; copies retain their complete relative paths
+under the current project's `.guides/` directory. No manifest or frontmatter is
+required, and supporting assets are copied byte-for-byte alongside documents.
+
+```bash
+codexmgr guides list
+codexmgr guides enable games/general
+codexmgr guides disable games/general/frameworks
+```
+
+The example copies documents into `.guides/games/general/`, including its
+`monetization/` subtree, but excludes `frameworks/`. Folder references accept an
+optional trailing slash and are saved with `/`. File references use exact names;
+there is no implicit `.md` extension.
+
+```toml
+[guides]
+enabled = ["games/general/"]
+disabled = ["games/general/frameworks/"]
+```
+
+Folder selectors stay active: later `apply` operations include newly added files
+and remove obsolete managed copies. Disabled files and folders override enabled
+selections, including parent enables. Enabling a parent again preserves child
+exclusions. Missing enabled sources are errors; missing exclusions remain valid.
+
+Existing unmanaged destination files are never overwritten. Changed managed
+copies use the normal per-file conflict choices. Cleanup removes only lock-owned
+files and empty directories, preserving unrelated project documents. Guide
+references must be safe relative paths; symlinks in source or destination guide
+paths are rejected. Guides do not inject project instructions or change Codex
+configuration. Empty source directories need not be copied. Disabling a guide
+removes its managed copy even if edited locally; save those edits elsewhere or
+use `update-source` before disabling it.
+
 ## Packages
 
-Packages are reusable bundles of snippets, agents, hooks, skills, and rules.
+Packages are reusable bundles of snippets, agents, hooks, skills, rules, and guides.
 They resolve from `$CODEXMGR_HOME/packages/<name>/config.toml`.
 
 A package config is a TOML document with root lists and optional profile tables:
@@ -299,12 +338,14 @@ agents = ["rule-retriever"]
 hooks = ["repo-rules"]
 skills = ["repo-rule-manager"]
 rules = ["react/"]
+guides = ["games/general/"]
 [profiles.strict]
 agentsmd = ["strict-coding"]
 agents = ["strict-agent"]
 hooks = ["strict-rules"]
 skills = ["strict-review"]
 rules = ["python/testing.md"]
+guides = ["games/advanced/performance.md"]
 ```
 
 The `agents` list enables custom agents from
@@ -326,11 +367,19 @@ descendants fails before the package operation writes project configuration.
 The same group behavior applies to TUI package selections and just-in-time
 package/profile overlays.
 
+The `guides` list accepts exact files and nested folders in both package roots
+and profiles. Unlike skill groups, guide folders remain persistent selectors:
+new documents appear on the next apply without re-enabling the package. Guides
+also participate in TUI package selection and temporary launch overlays, which
+restore the project's guide files when the child process exits.
+Guide overlays reject symlinks anywhere in the existing guide target tree before
+snapshotting, so unrelated links cannot be changed by restoration.
+
 `codexmgr package enable <name>` validates enabled package sources, then updates
 `.codex/codexmgr.toml` as if the corresponding resource commands had been run.
 
 `codexmgr package disable <name>` removes package `AGENTS.md` entries when
-present and disables the package skills, hooks, agents, and rules. Package state
+present and disables the package skills, hooks, agents, rules, and guides. Package state
 is not tracked separately; the resulting project config tables remain the
 source of truth.
 
@@ -355,7 +404,7 @@ These commands run `apply` automatically unless `--no-sync` is passed.
 
 `codexmgr tui` opens a Textual-based terminal UI for project-local
 configuration. It shows `AGENTS.md` snippets, hooks, custom agents, packages,
-and reusable MCP sources in selectable lists. Skills and rules are shown in
+and reusable MCP sources in selectable lists. Skills, rules, and guides are shown in
 collapsible folder trees.
 
 Changes are staged in memory while you navigate. Press `s` to save; the save
@@ -381,6 +430,13 @@ to disabled, and disabled to available. A folder with differing child states
 shows `mixed`; pressing `space` enables them all. Expanded folders and the
 highlighted skill or group are preserved when cycling or switching sections.
 Selections remain staged until you save.
+
+Press `9` for Guides. Enter opens or closes a folder; Space cycles a file or
+folder's explicit selector through available, enabled, disabled, and available.
+Clearing a selector restores inherited parent behavior. Labels show explicit
+selection state, so an available child may still be copied through an enabled
+parent. Expanded folders and focus are preserved across selection changes and
+section switches.
 
 ```bash
 codexmgr tui
@@ -523,10 +579,13 @@ codexmgr hooks disable [--no-sync] <hook-name> [...]
 codexmgr rules list
 codexmgr rules enable [--no-sync] <rule-ref> [...]
 codexmgr rules disable [--no-sync] <rule-ref> [...]
+codexmgr guides list
+codexmgr guides enable [--no-sync] <guide-ref> [...]
+codexmgr guides disable [--no-sync] <guide-ref> [...]
 ```
 
 `skill list`, `agents list`, and `hooks list` print available resources and
-mark configured entries as enabled, disabled, or missing. `rules list` prints
+mark configured entries as enabled, disabled, or missing. `rules list` and `guides list` print
 the same state in an indented folder hierarchy.
 
 A `skill-ref` is a skill name, explicit skill path, or store-relative group
@@ -536,7 +595,7 @@ Enable commands validate manager-home sources when the source type must already
 exist. Enable and disable lists stay mutually exclusive, and repeated commands
 keep one entry.
 
-Rules have one exception to exact mutual exclusion: a parent folder enable and a
+Rules and guides have one exception to exact mutual exclusion: a parent folder enable and a
 child file or folder disable can intentionally coexist.
 
 Package commands:

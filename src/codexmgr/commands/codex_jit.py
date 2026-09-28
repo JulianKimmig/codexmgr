@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ..core.errors import CommandError
+from ..guides.sources import guide_descendants
 from ..packages.mutation import (
     apply_package_entries_to_config,
     selected_entries_for_package,
@@ -116,6 +117,8 @@ def run_with_jit_overlay(
         codex_home,
         codexmgr_home,
     )
+    if overlay_state.guide_copies or overlay_state.obsolete_guide_copy_targets:
+        guide_descendants(overlay_state.guide_root.parent, overlay_state.guide_root.name)
     snapshots = snapshot_paths(_state_paths(overlay_state))
     apply_project_state(overlay_state, cwd=cwd)
     try:
@@ -214,6 +217,7 @@ def _state_paths(state: ProjectBuild) -> list[Path]:
         *state.obsolete_hook_copy_targets,
         *state.obsolete_agent_copy_targets,
         *(_rule_root(target) for target in state.obsolete_rule_copy_targets),
+        *([state.guide_root] if state.guide_copies or state.obsolete_guide_copy_targets else []),
     ]
 
 

@@ -16,6 +16,7 @@ from ..hooks.sources import project_hooks_json_path
 from ..mcp.apply import apply_mcp_overrides, mcp_lock_data
 from ..mcp.resolution import McpResolution
 from ..rules.resolution import RuleResolution, rule_lock_data
+from ..guides.resolution import GuideResolution, guide_lock_data
 from ..skills.copies import copy_lock_entries
 from ..skills.resolution import SkillResolution
 
@@ -69,7 +70,7 @@ def build_generated_files(
         Expected generated files in write order.
     """
     files: list[GeneratedFile] = [build_project_gitignore_file(cwd)]
-    if lock_data:
+    if lock_data or lock_path(cwd).exists():
         files.append(GeneratedFile(lock_path(cwd), dump_toml(lock_data)))
     if "agents_md" in config:
         files.append(_agents_md_file(cwd, locked_agents_md))
@@ -89,8 +90,9 @@ def build_lock_data(
     hook_resolution: HookResolution,
     rule_resolution: RuleResolution,
     mcp_resolution: McpResolution,
+    guide_resolution: GuideResolution,
 ) -> dict[str, Any]:
-    """Build lockfile data for configured AGENTS.md, agents, skills, hooks, and MCP.
+    """Build portable lockfile data for all configured project resource families.
 
     Args:
         config: Parsed project codexmgr configuration.
@@ -99,6 +101,7 @@ def build_lock_data(
         skill_resolution: Resolved skill configuration and copy state.
         hook_resolution: Resolved hook configuration and copy state.
         rule_resolution: Resolved reusable-rule copy state.
+        guide_resolution: Resolved reusable-guide copy state.
         mcp_resolution: Resolved MCP server configuration.
 
     Returns:
@@ -124,6 +127,8 @@ def build_lock_data(
         lock_data["hooks"] = hook_lock_data(hook_resolution)
     if "rules" in config:
         lock_data["rules"] = rule_lock_data(rule_resolution)
+    if "guides" in config:
+        lock_data["guides"] = guide_lock_data(guide_resolution)
     if "mcp" in config:
         lock_data["mcp"] = mcp_lock_data(
             mcp_resolution.enabled_sources,

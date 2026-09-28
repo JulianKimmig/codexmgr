@@ -20,6 +20,7 @@ from ..commands.config_mutations import (
 from ..commands.health import run_doctor, run_status
 from ..commands.navigation import run_codexmgr_home_action
 from ..commands.rules import run_rules_command
+from ..commands.guides import run_guides_command
 from ..core.errors import CommandError
 from ..core.paths import global_codex_dir, global_codexmgr_dir
 from ..custom_agents.cli import run_agents_command
@@ -206,6 +207,8 @@ def _dispatch(
 
     if args.command == "rules":
         return run_rules_command(args, cwd, codex_home, codexmgr_home, stdout)
+    if args.command == "guides":
+        return run_guides_command(args, cwd, codex_home, codexmgr_home, stdout)
 
     if args.command == "package":
         return run_package_command(args, cwd, codex_home, codexmgr_home, stdout)
