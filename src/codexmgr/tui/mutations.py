@@ -15,6 +15,7 @@ from ..packages.config import PackageEntries
 from ..project.config import agents_md_sources
 from ..rules.config import rule_lists
 from ..rules.sources import canonical_rule_ref
+from ..guides.sources import canonical_guide_ref
 from ..skills.config import _skill_lists
 
 
@@ -38,19 +39,23 @@ def validate_package_enable(
         require_hook_source(hook, codexmgr_home)
     for rule in entries.rules:
         canonical_rule_ref(rule, codexmgr_home)
+    for guide in entries.guides:
+        canonical_guide_ref(guide, codexmgr_home)
 
 
-def package_checks(config: MutableMapping[str, Any], entries: PackageEntries) -> list[str]:
+def package_checks(
+    config: MutableMapping[str, Any], entries: PackageEntries, *, skill_states: list[str],
+) -> list[str]:
     """Return per-entry states for package entries.
 
     Args:
         config: Staged codexmgr.toml document.
         entries: Package entries to inspect.
+        skill_states: Resolved states of individual skills after group expansion.
 
     Returns:
         State labels for all package entries.
     """
-    enabled_skills, disabled_skills = _skill_lists(config)
     enabled_agents, disabled_agents = agent_lists(config)
     enabled_hooks, disabled_hooks = hook_lists(config)
     enabled_rules, disabled_rules = rule_lists(config)
@@ -58,7 +63,7 @@ def package_checks(config: MutableMapping[str, Any], entries: PackageEntries) ->
     return [
         *(_agentsmd_state(reference, sources) for reference in entries.agentsmd),
         *(_state(agent, enabled_agents, disabled_agents) for agent in entries.agents),
-        *(_state(skill, enabled_skills, disabled_skills) for skill in entries.skills),
+        *skill_states,
         *(_state(hook, enabled_hooks, disabled_hooks) for hook in entries.hooks),
         *(_state(rule, enabled_rules, disabled_rules) for rule in entries.rules),
     ]

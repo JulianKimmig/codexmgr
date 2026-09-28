@@ -32,7 +32,7 @@ Screen {
     border: solid #3a4658;
     padding: 1;
 }
-#rule-tree {
+#rule-tree, #skill-tree, #guide-tree {
     height: 1fr;
     border: solid #3a4658;
     padding: 1;
@@ -57,6 +57,7 @@ SECTION_TITLES = {
     "rules": "Rules",
     "packages": "Packages",
     "mcp": "MCP Servers",
+    "guides": "Guides",
 }
 
 NAV_LABELS = [
@@ -68,8 +69,10 @@ NAV_LABELS = [
     "6 Rules",
     "7 Packages",
     "8 MCP",
+    "9 Guides",
     "",
     "space Cycle",
+    "enter Open/close folder",
     "s Save",
     "r Refresh",
     "q Quit",
@@ -85,6 +88,7 @@ TUI_BINDINGS = [
     ("6", "section('rules')", "Rules"),
     ("7", "section('packages')", "Packages"),
     ("8", "section('mcp')", "MCP"),
+    ("9", "section('guides')", "Guides"),
     ("r", "refresh", "Refresh"),
     ("s", "save", "Save"),
     ("q", "quit", "Quit"),
@@ -95,6 +99,7 @@ STATE_STYLES = {
     "disabled": "yellow",
     "available": "dim",
     "partial": "cyan",
+    "mixed": "cyan",
     "configured": "blue",
     "error": "bold red",
 }

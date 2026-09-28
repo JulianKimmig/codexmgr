@@ -4,6 +4,7 @@ from pathlib import Path
 
 from rich.text import Text
 
+from ..core.errors import CommandError
 from .diff import staged_diff_lines
 from .models import ManagedItem
 from .rendering import SECTION_TITLES
@@ -80,11 +81,15 @@ def _dashboard_detail(staged: StagedConfig, *, show_diff: bool) -> str:
     Returns:
         Dashboard detail text.
     """
+    try:
+        sync_text = staged_diff_lines(staged, show_diff=show_diff)
+    except CommandError as exc:
+        sync_text = f"ERROR {exc}"
     return dashboard_detail(
         staged.cwd,
         staged.codex_home,
         staged.codexmgr_home,
-        staged_diff_lines(staged, show_diff=show_diff),
+        sync_text,
     )
 
 

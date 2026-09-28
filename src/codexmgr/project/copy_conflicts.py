@@ -36,16 +36,20 @@ class CopyConflict:
     Attributes:
         source: Canonical reusable source file.
         target: Project-local managed copy file.
-        source_content: Source bytes observed during project-state construction.
+        source_content: Observed source bytes, or None for a new local-file import.
         target_content: Target bytes observed during conflict discovery.
         resource_kind: Resource family used for validation and display.
+        source_root: Shared document boundary for a new import, otherwise None.
+        target_root: Project document boundary for a new import, otherwise None.
     """
 
     source: Path
     target: Path
-    source_content: bytes
+    source_content: bytes | None
     target_content: bytes
     resource_kind: str
+    source_root: Path | None = None
+    target_root: Path | None = None
 
 
 ConflictResolver = Callable[[CopyConflict], CopyResolution]
@@ -150,6 +154,10 @@ def choose_copy_resolutions(
         if action == CopyResolution.ABORT:
             raise CommandError("Apply aborted; no files changed")
         selected[_absolute_target(cwd, conflict.target)] = action
+    for conflict in conflicts:
+        action = selected[_absolute_target(cwd, conflict.target)]
+        if conflict.source_content is None and action == CopyResolution.OVERWRITE_LOCAL:
+            raise CommandError(f"New local files require keep-local or update-source: {conflict.target}")
     return selected
 
 
@@ -196,12 +204,14 @@ def _unresolved_message(cwd: Path, conflicts: Sequence[CopyConflict]) -> str:
     lines = ["Managed copy conflicts require a resolution before apply:"]
     for conflict in conflicts:
         target = display_target(cwd, conflict.target)
+        kind = "New local file" if conflict.source_content is None else "Managed copy conflict"
+        actions = "keep-local|update-source" if conflict.source_content is None else "keep-local|overwrite-local|update-source"
         lines.extend(
             (
-                f"- Managed copy conflict: {target}",
+                f"- {kind}: {target}",
                 f"  Source: {conflict.source}",
                 f"  Resolve with: codexmgr apply --resolve {target} "
-                "<keep-local|overwrite-local|update-source>",
+                f"<{actions}>",
             ),
         )
     return "\n".join(lines)

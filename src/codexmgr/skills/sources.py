@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ..core.errors import CommandError
 from ..core.paths import CODEXMGR_HOME_SOURCE
+from .discovery import matching_paths, skill_paths
 
 CODEX_HOME_SOURCE = "codex_home"
 LOCAL_SOURCE = "local"
@@ -36,7 +37,7 @@ class SkillSource:
 
 
 def available_skill_names(cwd: Path, codex_home: Path, codexmgr_home: Path) -> list[str]:
-    """List named skills available in configured stores.
+    """List store-relative skill references available in configured stores.
 
     Args:
         cwd: Project directory whose local .agents skills should be inspected.
@@ -44,7 +45,7 @@ def available_skill_names(cwd: Path, codex_home: Path, codexmgr_home: Path) -> l
         codexmgr_home: codexmgr home directory.
 
     Returns:
-        Sorted unique skill names.
+        Sorted unique references, including group folders for nested skills.
     """
     codexmgr_names = set(_home_skill_names(codexmgr_home))
     codex_names = set(_home_skill_names(codex_home))
@@ -69,8 +70,11 @@ def resolve_skill_reference(
     Returns:
         Resolved skill source, or None when no SKILL.md exists.
     """
+    source = _resolve_named_skill(skill, cwd, codex_home, codexmgr_home)
+    if source is not None:
+        return source
     if is_named_skill(skill):
-        return _resolve_named_skill(skill, cwd, codex_home, codexmgr_home)
+        return None
     return _resolve_path_skill(skill, cwd)
 
 
@@ -127,10 +131,10 @@ def _resolve_named_skill(
     codex_home: Path,
     codexmgr_home: Path,
 ) -> SkillSource | None:
-    """Resolve one bare skill name.
+    """Resolve a bare or group-qualified reference for read-only callers.
 
     Args:
-        name: Bare skill name.
+        name: Bare skill name or store-relative reference.
         cwd: Project directory used for local skills.
         codex_home: Codex home directory.
         codexmgr_home: codexmgr home directory.
@@ -138,20 +142,25 @@ def _resolve_named_skill(
     Returns:
         Resolved skill source, or None.
     """
-    codexmgr_file = _home_skill_file(codexmgr_home, name)
-    codex_file = _home_skill_file(codex_home, name)
-    has_codexmgr = codexmgr_file.is_file()
-    has_codex = codex_file.is_file()
-    if has_codexmgr and has_codex:
-        _raise_duplicate_named_skill(name, codexmgr_file, codex_file)
-        return SkillSource(name, codex_file.resolve(), CODEX_HOME_SOURCE)
-    if has_codexmgr:
-        return SkillSource(name, codexmgr_file.resolve(), CODEXMGR_HOME_SOURCE)
-    if has_codex:
-        return SkillSource(name, codex_file.resolve(), CODEX_HOME_SOURCE)
-    local_file = project_skill_dir(cwd, name) / "SKILL.md"
-    if local_file.is_file():
-        return SkillSource(name, local_file.resolve(), LOCAL_SOURCE)
+    manager = matching_paths(codexmgr_home / "skills", name)
+    codex = matching_paths(codex_home / "skills", name)
+    if manager and codex and not _same_path(codexmgr_home, codex_home):
+        raise CommandError(f"Skill exists in both CODEXMGR_HOME and CODEX_HOME: {name}")
+    stores = [
+        (codexmgr_home / "skills", manager, CODEXMGR_HOME_SOURCE),
+        (codex_home / "skills", codex, CODEX_HOME_SOURCE),
+        (
+            cwd / ".agents" / "skills",
+            matching_paths(cwd / ".agents" / "skills", name),
+            LOCAL_SOURCE,
+        ),
+    ]
+    for root, references, kind in stores:
+        if len(references) > 1:
+            raise CommandError(f"Ambiguous skill reference: {name}: {', '.join(references)}")
+        if references:
+            reference = references[0]
+            return SkillSource(reference, (root / reference / "SKILL.md").resolve(), kind)
     return None
 
 
@@ -183,7 +192,7 @@ def _home_skill_names(home: Path) -> list[str]:
     Returns:
         Sorted skill names with a SKILL.md file.
     """
-    return _skill_names(home / "skills")
+    return skill_paths(home / "skills")
 
 
 def _local_skill_names(cwd: Path) -> list[str]:
@@ -195,38 +204,7 @@ def _local_skill_names(cwd: Path) -> list[str]:
     Returns:
         Sorted local skill names with a SKILL.md file.
     """
-    return _skill_names(cwd / ".agents" / "skills")
-
-
-def _skill_names(skills_dir: Path) -> list[str]:
-    """Return sorted child-folder names containing a skill file.
-
-    Args:
-        skills_dir: Store directory containing named skill folders.
-
-    Returns:
-        Sorted folder names with an immediate ``SKILL.md`` child.
-    """
-    if not skills_dir.is_dir():
-        return []
-    return sorted(
-        path.name
-        for path in skills_dir.iterdir()
-        if path.is_dir() and (path / "SKILL.md").is_file()
-    )
-
-
-def _home_skill_file(home: Path, name: str) -> Path:
-    """Return the expected SKILL.md path for a home skill.
-
-    Args:
-        home: Home directory.
-        name: Bare skill name.
-
-    Returns:
-        Expected SKILL.md path.
-    """
-    return home / "skills" / name / "SKILL.md"
+    return skill_paths(cwd / ".agents" / "skills")
 
 
 def _raise_duplicate_home_skill(
@@ -250,19 +228,6 @@ def _raise_duplicate_home_skill(
         raise CommandError(
             f"Skill exists in both CODEXMGR_HOME and CODEX_HOME: {duplicates[0]}"
         )
-
-
-def _raise_duplicate_named_skill(name: str, codexmgr_file: Path, codex_file: Path) -> None:
-    """Raise when a named skill resolves from distinct home stores.
-
-    Args:
-        name: Bare skill name.
-        codexmgr_file: CODEXMGR_HOME SKILL.md path.
-        codex_file: CODEX_HOME SKILL.md path.
-    """
-    if _same_path(codexmgr_file.parent, codex_file.parent):
-        return
-    raise CommandError(f"Skill exists in both CODEXMGR_HOME and CODEX_HOME: {name}")
 
 
 def _same_path(left: Path, right: Path) -> bool:

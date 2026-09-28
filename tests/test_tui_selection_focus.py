@@ -10,11 +10,30 @@ from codexmgr.tui.models import ManagedItem
 
 
 @pytest.mark.asyncio
-async def test_tui_cycle_keeps_selection_list_highlighted_item(
+async def test_tui_cycle_keeps_selection_list_highlighted_item(workspace, run_cli_with_homes):
+    """Non-tree sections still retain the selected row after a state cycle."""
+    project, codex = workspace
+    manager = project.parent / "manager"
+    directory = manager / "agents"
+    directory.mkdir(parents=True)
+    for name in ("alpha", "beta"):
+        (directory / f"{name}.toml").write_text(f'name = "{name}"\n')
+    run_cli_with_homes(["setup"], project, codex, manager)
+    app = CodexMgrTui(
+        cwd=project, codex_home=codex, codexmgr_home=manager,
+        no_sync=True, show_diff=False,
+    )
+    async with app.run_test() as pilot:
+        await pilot.press("5", "down", "space")
+        assert app.query_one("#items", SelectionList).highlighted_option.value == "beta"
+
+
+@pytest.mark.asyncio
+async def test_tui_cycle_keeps_skill_tree_highlighted_item(
     workspace,
     run_cli_with_homes,
 ):
-    """Cycling a list row keeps focus on the same resource after refresh."""
+    """Cycling a skill tree row keeps focus on the same resource after refresh."""
     project, codex_home = workspace
     codexmgr_home = codex_home.parent / "codexmgr-home"
     _write_skill(codexmgr_home, "alpha")
@@ -33,10 +52,9 @@ async def test_tui_cycle_keeps_selection_list_highlighted_item(
         await pilot.press("down")
         await pilot.press("space")
         await pilot.pause()
-        items = app.query_one("#items", SelectionList)
+        tree = app.query_one("#skill-tree", Tree)
 
-    assert items.highlighted_option is not None
-    assert items.highlighted_option.value == "beta"
+    assert tree.cursor_node.data.selection_value() == "beta"
 
 
 @pytest.mark.asyncio

@@ -6,7 +6,6 @@ from textual.widgets import SelectionList, Tree
 from textual.widgets._tree import TreeNode
 
 from .models import ManagedItem
-from .rule_tree import rule_item_from_tree_node
 
 
 def highlighted_list_item(
@@ -35,16 +34,17 @@ def highlighted_list_item(
     )
 
 
-def highlighted_rule_item(tree: Tree[ManagedItem | None]) -> ManagedItem | None:
-    """Return the managed item highlighted in a reusable-rules tree.
+def highlighted_tree_item(tree: Tree[ManagedItem | None]) -> ManagedItem | None:
+    """Return the managed item highlighted in a resource tree.
 
     Args:
-        tree: Rules tree widget containing managed rule data.
+        tree: Resource tree widget containing managed item data.
 
     Returns:
-        Highlighted managed item, or None when the cursor is on a folder node.
+        Highlighted item, or None for an empty tree or a nonselectable folder.
     """
-    return rule_item_from_tree_node(tree.cursor_node)
+    node = tree.cursor_node
+    return node.data if node is not None else None
 
 
 def restore_selection_list_focus(
@@ -70,15 +70,15 @@ def restore_selection_list_focus(
     items.highlighted = 0
 
 
-def restore_rule_tree_focus(
+def restore_tree_focus(
     tree: Tree[ManagedItem | None],
     selection_value: str | None,
 ) -> None:
-    """Restore a rules-tree cursor after nodes are rebuilt.
+    """Restore a resource-tree cursor after nodes are rebuilt.
 
     Args:
-        tree: Rules tree widget with current nodes.
-        selection_value: Stable rule value to restore, or None for initial focus.
+        tree: Resource tree widget with current nodes.
+        selection_value: Stable item value to restore, or None for initial focus.
 
     Returns:
         None.
@@ -105,7 +105,7 @@ def _find_tree_node(
     Returns:
         Matching tree node, or None when the subtree has no match.
     """
-    item = rule_item_from_tree_node(node)
+    item = node.data
     if item is not None and item.selection_value() == selection_value:
         return node
     for child in node.children:

@@ -4,6 +4,7 @@ import argparse
 
 from ..commands.navigation import add_cd_arguments
 from .parsers.agents import add_agents_parser
+from .parsers.guides import add_guides_parser
 from .parsers.mcp import add_mcp_parser
 
 
@@ -25,6 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_skill_parser(subparsers)
     _add_hooks_parser(subparsers)
     _add_rules_parser(subparsers)
+    add_guides_parser(subparsers)
     _add_package_parser(subparsers)
     add_mcp_parser(subparsers, _add_no_sync_argument)
     _add_tui_parser(subparsers)
@@ -61,7 +63,7 @@ def _add_apply_parser(subparsers: argparse._SubParsersAction) -> None:
         nargs=2,
         metavar=("TARGET", "ACTION"),
         help=(
-            "Resolve one managed-copy conflict with keep-local, "
+            "Resolve a copy conflict or new local file with keep-local, "
             "overwrite-local, or update-source; repeat per target"
         ),
     )
@@ -141,13 +143,13 @@ def _add_skill_parser(subparsers: argparse._SubParsersAction) -> None:
     skill = subparsers.add_parser("skill", help="Manage project skill configuration")
     skill_subparsers = skill.add_subparsers(dest="skill_command", required=True)
 
-    enable = skill_subparsers.add_parser("enable", help="Enable a skill")
+    enable = skill_subparsers.add_parser("enable", help="Enable skills or groups")
     _add_no_sync_argument(enable)
-    enable.add_argument("skills", nargs="+", help="Skill names or paths")
+    enable.add_argument("skills", nargs="+", help="Skill names, paths, or groups ending in /")
 
-    disable = skill_subparsers.add_parser("disable", help="Disable a skill")
+    disable = skill_subparsers.add_parser("disable", help="Disable skills or groups")
     _add_no_sync_argument(disable)
-    disable.add_argument("skills", nargs="+", help="Skill names or paths")
+    disable.add_argument("skills", nargs="+", help="Skill names, paths, or groups ending in /")
 
     skill_subparsers.add_parser("list", help="List available and configured skills")
 

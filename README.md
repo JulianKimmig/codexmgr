@@ -135,6 +135,7 @@ file for you, and you can also edit it by hand when that is clearer.
 - `.codex/agents/<name>.toml`: copied custom-agent definitions
 - `.agents/skills/<name>`: copied manager-home skills
 - `.rules/<path>`: copied reusable rule files
+- `.guides/<path>`: copied reusable guide documents and supporting assets
 - `AGENTS.md`: project instructions with only the generated block replaced
 
 The managed `AGENTS.md` block is:
@@ -202,24 +203,52 @@ Named `AGENTS.md` snippets resolve from
 `$CODEXMGR_HOME/agentsmd/<name>.toml`. Path-like snippet values resolve
 relative to the project unless they are absolute paths.
 
-Bare skill names resolve across the project `.agents/skills`,
-`$CODEXMGR_HOME/skills`, and `$CODEX_HOME/skills` stores. If the same folder
-name exists in more than one store, apply fails and asks for an explicit path.
+Skills are discovered recursively in the project `.agents/skills`,
+`$CODEXMGR_HOME/skills`, and `$CODEX_HOME/skills` stores. Discovery stops at each
+directory containing `SKILL.md`, so bundled examples are not separate skills.
+Use a unique bare folder name such as `skill1`, or a store-relative reference
+such as `set1/skill1`. An exact store-relative match takes precedence over leaf
+name matching within that store. Ambiguous references require a qualified
+reference or an explicit path to select one source. CLI lists show nested
+skills with their store-relative references, and the TUI groups them in a
+collapsible folder tree. Both hide duplicate rows for managed project copies
+while the source remains available.
 The project copy recorded for an enabled `$CODEXMGR_HOME` skill is recognized
 as a managed mirror and does not create a false collision on later applies.
 
+To enable or disable all currently known skills under a group, use its
+store-relative path with a trailing slash:
+
+```bash
+codexmgr skill enable set1/
+codexmgr skill disable set1/subgroup/
+```
+
+Group commands include all descendant subgroups and save individual skill
+references in the project config. Already configured descendants remain included
+even if their source is missing. Skills added to the source group later are not
+selected automatically. Groups with no discovered or configured descendants
+fail before the config is written.
+
 Enabled skills from `$CODEXMGR_HOME` are copied into `.agents/skills/<name>` on
-every apply. Differing files in a known managed copy use the per-target
+every apply. Group folders organize the source collection; each skill is copied
+flat with its contents intact. If the folder name conflicts, codexmgr prefixes
+the nearest group using a hyphen: `set1/skill1` can become `set1-skill1`.
+Additional ancestor groups are prepended when needed; apply fails if no unique
+name is possible. Differing files in a known managed copy use the per-target
 conflict choices, while the overlay preserves extra local files.
-Path-like skill values can point to a `SKILL.md` file or a directory containing
-`SKILL.md`; a path-like value that does not exist is an error.
+Existing managed copies retain their assigned names on later applies.
+Explicit paths such as `./skills/skill1`, `../skill1`, `~/skills/skill1`, or an
+absolute path can point to `SKILL.md` or its containing directory. Relative
+paths resolve from the project; a missing explicit path is an error.
 
 Project-local and copied manager-home skills generate portable `name` selectors
 using the `name` value in their `SKILL.md` YAML frontmatter. Selected skills in
 those stores must therefore have valid frontmatter and a non-empty name. Apply
 also fails if two discoverable skills declare the same generated name. Skills
-resolved directly from `$CODEX_HOME` and explicit path references keep absolute
-`path` selectors because those sources are machine-specific or explicitly
+keep their declared YAML names even when copy folders gain a group prefix.
+Skills resolved directly from `$CODEX_HOME` and explicit path references keep
+absolute `path` selectors because those sources are machine-specific or explicitly
 requested. Missing bare names remain name-based entries so Codex can resolve
 them later from another installed source.
 
@@ -228,7 +257,8 @@ source `codexmgr_home` and project-relative targets. Apply derives their paths
 from the current `$CODEXMGR_HOME` and project root, accepts legacy absolute copy
 entries, and rewrites them in portable form. Moving or cloning a project
 therefore does not churn generated lock state or direct cleanup into an old
-clone.
+clone. Nested skill copies additionally record `source_path` relative to the
+source store's `skills/` directory, independently of the flattened target name.
 
 Named custom agents resolve from `$CODEXMGR_HOME/agents/<name>.toml`. Enabled
 agents are copied into `.codex/agents/<name>.toml`; disabled agents remove the
@@ -257,9 +287,60 @@ First-time rule applies refuse to overwrite unmanaged `.rules/...` files. This
 keeps existing project-local rules from being replaced accidentally. The
 per-target conflict choices apply after a target is a known managed copy.
 
+## Guides
+
+Guides are reusable documents stored under `$CODEXMGR_HOME/guides/`. Select any
+folder depth or an individual file; copies retain their complete relative paths
+under the current project's `.guides/` directory. No manifest or frontmatter is
+required, and supporting assets are copied byte-for-byte alongside documents.
+
+```bash
+codexmgr guides list
+codexmgr guides enable games/general
+codexmgr guides disable games/general/frameworks
+```
+
+The example copies documents into `.guides/games/general/`, including its
+`monetization/` subtree, but excludes `frameworks/`. Folder references accept an
+optional trailing slash and are saved with `/`. File references use exact names;
+there is no implicit `.md` extension.
+
+```toml
+[guides]
+enabled = ["games/general/"]
+disabled = ["games/general/frameworks/"]
+```
+
+Folder selectors stay active: later `apply` operations include newly added files
+and remove obsolete managed copies. Disabled files and folders override enabled
+selections, including parent enables. Enabling a parent again preserves child
+exclusions. Missing enabled sources are errors; missing exclusions remain valid.
+
+Existing unmanaged destination files are never overwritten. Changed managed
+copies use the normal per-file conflict choices. Cleanup removes only lock-owned
+files and empty directories, preserving unrelated project documents. Guide
+references must be safe relative paths; symlinks in source or destination guide
+paths are rejected. Guides do not inject project instructions or change Codex
+configuration. Empty source directories need not be copied. Disabling a guide
+removes its managed copy even if edited locally; save those edits elsewhere or
+use `update-source` before disabling it.
+
+New files authored inside an enabled project guide folder are discovered on the
+next `apply` or TUI save. The same workflow applies to Rules. You can add each
+file to its shared store, keep it project-only, or abort. Only files without a
+shared counterpart or prior managed-copy ownership are offered, and disabled
+files/subfolders are excluded. This happens on apply/save, not through a
+background file watcher.
+
+For a new file, **keep project-only** is remembered in the project lockfile's
+resource-specific `project_only` list. It remains unmanaged and is not deleted
+when the folder is disabled. Remove that file's entry from the list to reconsider
+it on the next apply. Adding it to the shared store preserves its relative path
+and records managed ownership in the same apply. Neither choice is automatic.
+
 ## Packages
 
-Packages are reusable bundles of snippets, agents, hooks, skills, and rules.
+Packages are reusable bundles of snippets, agents, hooks, skills, rules, and guides.
 They resolve from `$CODEXMGR_HOME/packages/<name>/config.toml`.
 
 A package config is a TOML document with root lists and optional profile tables:
@@ -270,22 +351,48 @@ agents = ["rule-retriever"]
 hooks = ["repo-rules"]
 skills = ["repo-rule-manager"]
 rules = ["react/"]
+guides = ["games/general/"]
 [profiles.strict]
 agentsmd = ["strict-coding"]
 agents = ["strict-agent"]
 hooks = ["strict-rules"]
 skills = ["strict-review"]
 rules = ["python/testing.md"]
+guides = ["games/advanced/performance.md"]
 ```
 
 The `agents` list enables custom agents from
 `$CODEXMGR_HOME/agents/<name>.toml`.
 
+The `skills` list accepts individual skills and store-relative folder groups
+ending in `/`, in both the root package and profiles. For example, a Phaser
+package can contain:
+
+```toml
+skills = ["phaserjs/"]
+```
+
+Enabling or disabling the package expands the group recursively and saves each
+currently known skill individually. Overlapping groups and individual skill
+references select each skill once. New skills added to a group remain available
+until you enable the package again. A group with no discovered or configured
+descendants fails before the package operation writes project configuration.
+The same group behavior applies to TUI package selections and just-in-time
+package/profile overlays.
+
+The `guides` list accepts exact files and nested folders in both package roots
+and profiles. Unlike skill groups, guide folders remain persistent selectors:
+new documents appear on the next apply without re-enabling the package. Guides
+also participate in TUI package selection and temporary launch overlays, which
+restore the project's guide files when the child process exits.
+Guide overlays reject symlinks anywhere in the existing guide target tree before
+snapshotting, so unrelated links cannot be changed by restoration.
+
 `codexmgr package enable <name>` validates enabled package sources, then updates
 `.codex/codexmgr.toml` as if the corresponding resource commands had been run.
 
 `codexmgr package disable <name>` removes package `AGENTS.md` entries when
-present and disables the package skills, hooks, agents, and rules. Package state
+present and disables the package skills, hooks, agents, rules, and guides. Package state
 is not tracked separately; the resulting project config tables remain the
 source of truth.
 
@@ -309,9 +416,9 @@ These commands run `apply` automatically unless `--no-sync` is passed.
 ## Interactive TUI
 
 `codexmgr tui` opens a Textual-based terminal UI for project-local
-configuration. It shows `AGENTS.md` snippets, skills, hooks, custom agents,
-packages, and reusable MCP sources in selectable lists. Rules are shown
-in a collapsible folder tree.
+configuration. It shows `AGENTS.md` snippets, hooks, custom agents, packages,
+and reusable MCP sources in selectable lists. Skills, rules, and guides are shown in
+collapsible folder trees.
 
 Changes are staged in memory while you navigate. Press `s` to save; the save
 writes `.codex/codexmgr.toml` once and runs `apply` once unless `--no-sync` was
@@ -324,6 +431,25 @@ highlighted row through available, enabled, and disabled states. Package
 profiles appear as separate selectable rows under their package. In the Rules
 tree, cycling a file or folder node updates the full canonical rule ref behind
 that basename label.
+
+Package and profile states reflect the individual skills inside their groups.
+Enabling, disabling, or clearing a package row updates those descendants
+together; individual skills can still be changed in the Skills tree.
+
+In the Skills tree, press `enter` on a folder to expand or collapse it and
+select individual skills inside. Press `space` on a folder to cycle all its
+currently listed descendant skills together: available to enabled, enabled
+to disabled, and disabled to available. A folder with differing child states
+shows `mixed`; pressing `space` enables them all. Expanded folders and the
+highlighted skill or group are preserved when cycling or switching sections.
+Selections remain staged until you save.
+
+Press `9` for Guides. Enter opens or closes a folder; Space cycles a file or
+folder's explicit selector through available, enabled, disabled, and available.
+Clearing a selector restores inherited parent behavior. Labels show explicit
+selection state, so an available child may still be copied through an enabled
+parent. Expanded folders and focus are preserved across selection changes and
+section switches.
 
 ```bash
 codexmgr tui
@@ -388,9 +514,17 @@ codexmgr apply \
   --resolve .rules/python/testing.md update-source
 ```
 
-The available actions are `keep-local`, `overwrite-local`, and
-`update-source`. These resolutions apply only to the current invocation; an
-unresolved target makes noninteractive apply fail before writes.
+The available actions for existing managed copies are `keep-local`,
+`overwrite-local`, and `update-source`. These resolutions apply only to the
+current invocation; an unresolved target makes noninteractive apply fail before
+writes.
+
+For a newly discovered local Rule or Guide, use `--resolve <target-path>
+update-source` to add it to the shared store, or `--resolve <target-path>
+keep-local` to remember it as project-only. `overwrite-local` is unavailable
+because there is no shared source yet. Interactive apply and TUI save offer
+the corresponding choices, including abort. All import and existing-copy
+decisions are collected before applying writes.
 
 `apply --check` exits with a failure if generated files are out of sync without
 writing them. `apply --diff` also avoids writing and prints unified diffs for
@@ -398,6 +532,10 @@ the expected generated-file changes. Both modes remain read-only when a managed
 copy differs from its source. A noninteractive `apply` requires an explicit
 resolution for each conflicting target and fails before writes when any target
 is unresolved.
+
+Checks and diffs also report `Pending import` for new local rules/guides without
+prompting or publishing them. Selection commands and TUI saves using `--no-sync`
+defer import decisions until an apply.
 
 The `.codex/.gitignore` managed block uses a default-ignore rule rather than a
 list of known runtime filenames. New caches, databases, sessions, and other
@@ -455,8 +593,8 @@ Shared resource commands:
 
 ```bash
 codexmgr skill list
-codexmgr skill enable [--no-sync] <name-or-skill-path> [...]
-codexmgr skill disable [--no-sync] <name-or-skill-path> [...]
+codexmgr skill enable [--no-sync] <skill-ref> [...]
+codexmgr skill disable [--no-sync] <skill-ref> [...]
 codexmgr agents list
 codexmgr agents enable [--no-sync] <agent-name> [...]
 codexmgr agents disable [--no-sync] <agent-name> [...]
@@ -466,17 +604,23 @@ codexmgr hooks disable [--no-sync] <hook-name> [...]
 codexmgr rules list
 codexmgr rules enable [--no-sync] <rule-ref> [...]
 codexmgr rules disable [--no-sync] <rule-ref> [...]
+codexmgr guides list
+codexmgr guides enable [--no-sync] <guide-ref> [...]
+codexmgr guides disable [--no-sync] <guide-ref> [...]
 ```
 
 `skill list`, `agents list`, and `hooks list` print available resources and
-mark configured entries as enabled, disabled, or missing. `rules list` prints
+mark configured entries as enabled, disabled, or missing. `rules list` and `guides list` print
 the same state in an indented folder hierarchy.
+
+A `skill-ref` is a skill name, explicit skill path, or store-relative group
+path ending in `/`.
 
 Enable commands validate manager-home sources when the source type must already
 exist. Enable and disable lists stay mutually exclusive, and repeated commands
 keep one entry.
 
-Rules have one exception to exact mutual exclusion: a parent folder enable and a
+Rules and guides have one exception to exact mutual exclusion: a parent folder enable and a
 child file or folder disable can intentionally coexist.
 
 Package commands:

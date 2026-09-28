@@ -11,17 +11,25 @@ from textual.widgets import Footer, Header, Label, SelectionList, Static, Tree
 from ..core.errors import CommandError
 from .focus import (
     highlighted_list_item,
-    highlighted_rule_item,
-    restore_rule_tree_focus,
+    highlighted_tree_item,
+    restore_tree_focus,
     restore_selection_list_focus,
 )
 from .models import ManagedItem
 from .panels import detail_text, status_text, title_text
 from .rendering import APP_CSS, NAV_LABELS, TUI_BINDINGS, selection_for_item
 from .rule_tree import populate_rule_tree
+from .skill_tree import populate_skill_tree
+from .guide_tree import populate_guide_tree
 from .sections import cycle_section_state, items_for_section, set_section_selected
 from .save_flow import TuiSaveFlowMixin
 from .state import StagedConfig, load_staged_config
+
+TREE_SECTIONS = {
+    "rules": ("rule-tree", populate_rule_tree),
+    "skills": ("skill-tree", populate_skill_tree),
+    "guides": ("guide-tree", populate_guide_tree),
+}
 
 
 class CodexMgrTui(TuiSaveFlowMixin, App[int]):
@@ -85,6 +93,8 @@ class CodexMgrTui(TuiSaveFlowMixin, App[int]):
                 yield Static(id="title")
                 yield SelectionList[str](id="items")
                 yield Tree("Rules", id="rule-tree")
+                yield Tree("Skills", id="skill-tree")
+                yield Tree("Guides", id="guide-tree")
                 yield Static(id="detail")
                 yield Static(id="status")
         yield Footer()
@@ -131,8 +141,9 @@ class CodexMgrTui(TuiSaveFlowMixin, App[int]):
             None.
         """
         try:
-            if self.section == "rules":
-                item = highlighted_rule_item(self.query_one("#rule-tree", Tree))
+            if self.section in TREE_SECTIONS:
+                tree_id = TREE_SECTIONS[self.section][0]
+                item = highlighted_tree_item(self.query_one(f"#{tree_id}", Tree))
             else:
                 item = highlighted_list_item(
                     self.query_one("#items", SelectionList),
@@ -159,7 +170,7 @@ class CodexMgrTui(TuiSaveFlowMixin, App[int]):
         """
         if self._refreshing:
             return
-        if self.section == "rules":
+        if self.section in TREE_SECTIONS:
             return
         selected = set(event.selection_list.selected)
         enabled = selected - self._selected_values
@@ -191,7 +202,6 @@ class CodexMgrTui(TuiSaveFlowMixin, App[int]):
             try:
                 title = self.query_one("#title", Static)
                 items = self.query_one("#items", SelectionList)
-                rule_tree = self.query_one("#rule-tree", Tree)
                 detail = self.query_one("#detail", Static)
                 status = self.query_one("#status", Static)
             except NoMatches:
@@ -199,7 +209,6 @@ class CodexMgrTui(TuiSaveFlowMixin, App[int]):
             title.update(title_text(self.section, dirty=self.staged.dirty()))
             rendered_items, warning = self._refresh_resource_widget(
                 items,
-                rule_tree,
                 selection_value,
             )
             detail.update(
@@ -218,29 +227,36 @@ class CodexMgrTui(TuiSaveFlowMixin, App[int]):
     def _refresh_resource_widget(
         self,
         items: SelectionList[str],
-        rule_tree: Tree[ManagedItem | None],
         selection_value: str | None,
     ) -> tuple[list[ManagedItem], str]:
         """Refresh the active resource widget.
 
         Args:
             items: Selection list widget used by non-rule sections.
-            rule_tree: Tree widget used by the rules section.
             selection_value: Optional stable item value to keep highlighted.
 
         Returns:
             Rendered items and optional warning text.
         """
-        if self.section == "rules":
+        for section, (tree_id, _) in TREE_SECTIONS.items():
+            self.query_one(f"#{tree_id}", Tree).display = self.section == section
+        if self.section in TREE_SECTIONS:
             items.display = False
-            rule_tree.display = True
-            rendered_items = populate_rule_tree(rule_tree, self.staged)
+            tree_id, populate = TREE_SECTIONS[self.section]
+            tree = self.query_one(f"#{tree_id}", Tree)
+            highlighted = highlighted_tree_item(tree)
+            if selection_value is None and highlighted is not None:
+                selection_value = highlighted.selection_value()
+            warning = ""
+            try:
+                rendered_items = populate(tree, self.staged)
+            except CommandError as exc:
+                rendered_items, warning = [], str(exc)
             self._rendered_items = rendered_items
             self._selected_values = set()
-            restore_rule_tree_focus(rule_tree, selection_value)
-            rule_tree.focus()
-            return rendered_items, ""
-        rule_tree.display = False
+            restore_tree_focus(tree, selection_value)
+            tree.focus()
+            return rendered_items, warning
         items.display = True
         rendered_items, warning = items_for_section(self.staged, self.section)
         self._rendered_items = rendered_items

@@ -36,7 +36,7 @@ def staged_copy_conflicts(staged: "StagedConfig") -> list[CopyConflict]:
         staged.codex_home,
         staged.codexmgr_home,
     )
-    return find_copy_conflicts(state.copy_files)
+    return sorted([*find_copy_conflicts(state.copy_files), *state.local_imports], key=lambda item: str(item.target))
 
 
 def save_staged_config(

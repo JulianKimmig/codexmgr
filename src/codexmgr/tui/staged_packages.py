@@ -19,6 +19,7 @@ class PackageStageMixin:
             enabled,
             self.cwd,
             self.codexmgr_home,
+            codex_home=self.codex_home,
         )
 
     def set_package_profile_enabled(
@@ -41,6 +42,7 @@ class PackageStageMixin:
             enabled,
             self.cwd,
             self.codexmgr_home,
+            codex_home=self.codex_home,
         )
 
     def set_package_available(self, name: str) -> None:
@@ -54,6 +56,7 @@ class PackageStageMixin:
             name,
             self.cwd,
             self.codexmgr_home,
+            codex_home=self.codex_home,
         )
 
     def set_package_profile_available(self, name: str, profile: str) -> None:
@@ -68,6 +71,8 @@ class PackageStageMixin:
             name,
             profile,
             self.codexmgr_home,
+            cwd=self.cwd,
+            codex_home=self.codex_home,
         )
 
     def package_state(self, name: str) -> str:
@@ -79,7 +84,9 @@ class PackageStageMixin:
         Returns:
             Package state computed from staged entries.
         """
-        return packages.package_state(self.config, name, self.codexmgr_home)
+        return packages.package_state(
+            self.config, name, self.codexmgr_home, cwd=self.cwd, codex_home=self.codex_home,
+        )
 
     def package_profile_state(self, name: str, profile: str) -> str:
         """Return enabled, partial, or disabled for a package profile.
@@ -96,4 +103,6 @@ class PackageStageMixin:
             name,
             profile,
             self.codexmgr_home,
+            cwd=self.cwd,
+            codex_home=self.codex_home,
         )

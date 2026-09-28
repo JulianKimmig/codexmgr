@@ -12,6 +12,7 @@ from ..project.config import agents_md_sources, load_required_project_config
 from ..project.sync import generated_file_diffs
 from ..hooks.listing import configured_hook_lists, missing_enabled_hooks
 from ..rules.listing import configured_rule_lists, missing_enabled_rules
+from ..guides.listing import configured_guide_lists, missing_enabled_guides
 from ..skills.listing import configured_skill_lists, missing_enabled_skills
 
 
@@ -37,7 +38,12 @@ def run_status(
     enabled_hooks, disabled_hooks = configured_hook_lists(cwd)
     enabled_agents, disabled_agents = configured_agent_lists(cwd)
     enabled_rules, disabled_rules = configured_rule_lists(cwd)
-    diffs = generated_file_diffs(cwd, codex_home, codexmgr_home)
+    enabled_guides, disabled_guides = configured_guide_lists(cwd)
+    sync_error = ""
+    try:
+        diffs = generated_file_diffs(cwd, codex_home, codexmgr_home)
+    except CommandError as exc:
+        diffs, sync_error = [], str(exc)
     lines = [
         f"Project: {cwd}",
         f"CODEX_HOME: {codex_home}",
@@ -51,11 +57,13 @@ def run_status(
         f"Disabled agents: {_format_values(disabled_agents)}",
         f"Enabled rules: {_format_values(enabled_rules)}",
         f"Disabled rules: {_format_values(disabled_rules)}",
-        f"Generated files: {_sync_state(diffs)}",
+        f"Enabled guides: {_format_values(enabled_guides)}",
+        f"Disabled guides: {_format_values(disabled_guides)}",
+        f"Generated files: {'ERROR ' + sync_error if sync_error else _sync_state(diffs)}",
     ]
     lines.extend(f"  {diff.relative_path}" for diff in diffs)
     stdout.write("\n".join(lines) + "\n")
-    return 0
+    return 1 if sync_error else 0
 
 
 def run_doctor(
@@ -91,6 +99,8 @@ def run_doctor(
     _check_missing_enabled_hooks(cwd, codexmgr_home, report)
     _check_missing_enabled_agents(cwd, codexmgr_home, report)
     _check_missing_enabled_rules(cwd, codexmgr_home, report)
+    for guide in missing_enabled_guides(cwd, codexmgr_home):
+        report.append(f"ERROR Missing enabled guide: {guide}")
     _check_generated_files(cwd, codex_home, codexmgr_home, report)
 
     has_errors = any(line.startswith("ERROR ") for line in report)

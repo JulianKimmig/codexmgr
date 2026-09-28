@@ -8,6 +8,7 @@ from ..core.errors import CommandError
 from ..core.toml_io import load_toml_file
 from ..skills.metadata import read_skill_name
 from .copy_conflicts import CopyConflict, CopyResolution, SourceUpdateReporter
+from .local_imports import publish_local_import, validate_local_import
 
 
 def prepare_source_updates(
@@ -51,7 +52,10 @@ def apply_source_updates(
     for conflict in conflicts:
         if reporter is not None:
             reporter(conflict)
-        shutil.copy2(conflict.target, conflict.source)
+        if conflict.source_content is None:
+            publish_local_import(conflict)
+        else:
+            shutil.copy2(conflict.target, conflict.source)
 
 
 def skipped_copy_targets(
@@ -98,6 +102,9 @@ def _require_unchanged(conflict: CopyConflict) -> None:
     Args:
         conflict: Discovery-time copy conflict snapshot.
     """
+    if conflict.source_content is None:
+        validate_local_import(conflict)
+        return
     if (
         not conflict.source.is_file()
         or conflict.source.read_bytes() != conflict.source_content

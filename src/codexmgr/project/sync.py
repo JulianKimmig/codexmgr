@@ -7,7 +7,7 @@ from typing import TextIO
 
 from .apply import build_project_state, build_project_state_from_config
 from .state import GeneratedFile, ProjectBuild
-from ..skills.copies import SkillCopyFile
+from .copy_conflicts import ManagedCopyFile
 
 
 @dataclass(frozen=True)
@@ -21,6 +21,7 @@ class FileDiff:
         current: Current file content, or an empty string when missing.
         expected: Expected generated file content.
         binary: Whether either side could not be decoded as UTF-8 text.
+        pending_import: Whether this is an unowned local document awaiting a decision.
     """
 
     path: Path
@@ -29,6 +30,7 @@ class FileDiff:
     current: str
     expected: str
     binary: bool = False
+    pending_import: bool = False
 
 
 def generated_file_diffs(
@@ -90,10 +92,12 @@ def diffs_for_project_state(cwd: Path, state: ProjectBuild) -> list[FileDiff]:
         diff = _copy_file_diff(cwd, copy_file)
         if diff is not None:
             diffs.append(diff)
-    for obsolete_file in state.obsolete_file_targets:
+    for obsolete_file in [*state.obsolete_file_targets, *state.obsolete_guide_copy_targets]:
         diff = _obsolete_file_diff(cwd, obsolete_file)
         if diff is not None:
             diffs.append(diff)
+    diffs.extend(FileDiff(item.target, _display_path(cwd, item.target), True, "", "", pending_import=True)
+                 for item in state.local_imports)
     return diffs
 
 
@@ -125,7 +129,8 @@ def check_project_sync(
         stdout.write(format_file_diffs(diffs))
     else:
         for diff in diffs:
-            stdout.write(f"Out of sync: {diff.relative_path}\n")
+            label = "Pending import" if diff.pending_import else "Out of sync"
+            stdout.write(f"{label}: {diff.relative_path}\n")
     return 1
 
 
@@ -150,6 +155,8 @@ def _format_diff(diff: FileDiff) -> list[str]:
     Returns:
         Unified diff lines preserving line endings.
     """
+    if diff.pending_import:
+        return [f"Pending import: {diff.relative_path} (new project-local file)\n"]
     if diff.binary:
         return [
             f"--- {diff.relative_path} (current)\n",
@@ -195,8 +202,8 @@ def _text_file_diff(cwd: Path, generated_file: GeneratedFile) -> FileDiff | None
     )
 
 
-def _copy_file_diff(cwd: Path, copy_file: SkillCopyFile) -> FileDiff | None:
-    """Build a diff for one managed skill-copy file.
+def _copy_file_diff(cwd: Path, copy_file: ManagedCopyFile) -> FileDiff | None:
+    """Build a diff for one managed source-backed copy file.
 
     Args:
         cwd: Project directory used as display root.
@@ -233,8 +240,8 @@ def _obsolete_file_diff(cwd: Path, path: Path) -> FileDiff | None:
     """
     if not path.exists():
         return None
-    current = _read_existing_text(path)
-    return FileDiff(path, _display_path(cwd, path), True, current, "")
+    current, binary = _decode_bytes(path.read_bytes())
+    return FileDiff(path, _display_path(cwd, path), True, current, "", binary)
 
 
 def _decode_bytes(content: bytes) -> tuple[str, bool]:
