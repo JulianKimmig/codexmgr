@@ -117,6 +117,7 @@ def test_existing_conflicts_and_imports_are_one_decision_batch(local_document):
     assert target.read_bytes() == b"changed managed copy"
 
 
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="Requires os.mkfifo to create a FIFO")
 def test_special_local_files_fail_without_blocking_or_publishing(local_document):
     """Local FIFOs cannot be read as document imports, even beside valid files."""
     _, _, manager, family, target, cli = local_document

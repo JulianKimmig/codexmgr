@@ -65,6 +65,7 @@ def test_missing_owned_target_can_be_disabled(guides):
     assert not (project / ".guides").exists()
 
 
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="Requires os.mkfifo to create a FIFO")
 def test_special_source_files_are_rejected_without_reading(guides):
     """FIFO descendants produce errors instead of blocking on a file read."""
     _, _, manager, cli = guides

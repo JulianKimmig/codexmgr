@@ -98,13 +98,14 @@ def test_ambiguous_bare_name_requires_group_reference(workspace, run_cli_with_ho
     """A short input cannot arbitrarily choose between different grouped skills."""
     project, codex = workspace
     manager = project.parent / "manager"
-    write_skill(manager, "a/review", "a-review")
-    write_skill(manager, "b/review", "b-review")
+    first = write_skill(manager, "a/review", "a-review")
+    second = write_skill(manager, "b/review", "b-review")
     run_cli_with_homes(["setup"], project, codex, manager)
     code, _, error = run_cli_with_homes(["skill", "enable", "review"], project, codex, manager)
     assert code == 1
     assert "Ambiguous skill reference" in error
-    assert "a/review" in error and "b/review" in error
+    assert str(first) in error
+    assert str(second) in error
 
 
 def test_explicit_relative_path_bypasses_group_lookup(workspace, run_cli_with_homes, read_codex_config):
