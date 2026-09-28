@@ -36,7 +36,9 @@ def run_package_command(
         return 0
 
     if args.package_command == "enable":
-        names = enable_packages(args.packages, cwd, codexmgr_home, args.profiles)
+        names = enable_packages(
+            args.packages, cwd, codexmgr_home, args.profiles, codex_home=codex_home,
+        )
         return _finish_package_change(
             _package_messages("Enabled", names, args.profiles),
             args.no_sync,
@@ -47,7 +49,9 @@ def run_package_command(
         )
 
     if args.package_command == "disable":
-        names = disable_packages(args.packages, cwd, codexmgr_home, args.profiles)
+        names = disable_packages(
+            args.packages, cwd, codexmgr_home, args.profiles, codex_home=codex_home,
+        )
         return _finish_package_change(
             _package_messages("Disabled", names, args.profiles),
             args.no_sync,

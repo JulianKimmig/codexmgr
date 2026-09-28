@@ -82,7 +82,9 @@ def build_jit_project_state(
             codexmgr_home,
             request.profiles,
         )
-        apply_package_entries_to_config(overlay, entries, codexmgr_home, enabled=True)
+        apply_package_entries_to_config(
+            overlay, entries, codexmgr_home, enabled=True, cwd=cwd, codex_home=codex_home,
+        )
     return build_project_state_from_config(overlay, cwd, codex_home, codexmgr_home)
 
 

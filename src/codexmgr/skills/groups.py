@@ -83,6 +83,7 @@ def set_skill_references_state(
         codex_home: Codex source store.
         codexmgr_home: Manager source store.
     """
+    requested_groups = {ref for ref in references if _is_group(ref)}
     references = expand_skill_references(references, config, cwd, codex_home, codexmgr_home)
     available = (
         available_skill_names(cwd, codex_home, codexmgr_home)
@@ -93,6 +94,8 @@ def set_skill_references_state(
         selected.setdefault(_canonical(reference, available), reference)
     references = list(selected.values())
     enabled, disabled = _skill_lists(config)
+    enabled = [ref for ref in enabled if ref not in requested_groups]
+    disabled = [ref for ref in disabled if ref not in requested_groups]
     enabled = [
         ref for ref in enabled if _canonical(ref, available) not in selected
         or (state == "enabled" and ref in references)
@@ -108,6 +111,37 @@ def set_skill_references_state(
     elif state != "available":
         raise CommandError(f"Unsupported skill state: {state}")
     _set_skill_lists(config, enabled, disabled)
+
+
+def skill_reference_states(
+    config: Mapping[str, Any], references: list[str],
+    cwd: Path, codex_home: Path, codexmgr_home: Path,
+) -> list[str]:
+    """Read individual descendant states for skill references or groups.
+
+    Args:
+        config: Current or staged project configuration.
+        references: Individual skill references and trailing-slash groups.
+        cwd: Project root used for source discovery.
+        codex_home: Codex skill store.
+        codexmgr_home: Manager skill store.
+
+    Returns:
+        Enabled, disabled, or available for each distinct selected identity.
+    """
+    references = expand_skill_references(references, config, cwd, codex_home, codexmgr_home)
+    available = (
+        available_skill_names(cwd, codex_home, codexmgr_home)
+        if any(is_store_reference(ref) for ref in references) else []
+    )
+    enabled_refs, disabled_refs = _skill_lists(config)
+    enabled = {_canonical(ref, available) for ref in enabled_refs}
+    disabled = {_canonical(ref, available) for ref in disabled_refs}
+    identities = dict.fromkeys(_canonical(ref, available) for ref in references)
+    return [
+        "enabled" if ref in enabled else "disabled" if ref in disabled else "available"
+        for ref in identities
+    ]
 
 
 def _is_group(reference: str) -> bool:

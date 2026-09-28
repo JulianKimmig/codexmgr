@@ -310,6 +310,22 @@ rules = ["python/testing.md"]
 The `agents` list enables custom agents from
 `$CODEXMGR_HOME/agents/<name>.toml`.
 
+The `skills` list accepts individual skills and store-relative folder groups
+ending in `/`, in both the root package and profiles. For example, a Phaser
+package can contain:
+
+```toml
+skills = ["phaserjs/"]
+```
+
+Enabling or disabling the package expands the group recursively and saves each
+currently known skill individually. Overlapping groups and individual skill
+references select each skill once. New skills added to a group remain available
+until you enable the package again. A group with no discovered or configured
+descendants fails before the package operation writes project configuration.
+The same group behavior applies to TUI package selections and just-in-time
+package/profile overlays.
+
 `codexmgr package enable <name>` validates enabled package sources, then updates
 `.codex/codexmgr.toml` as if the corresponding resource commands had been run.
 
@@ -353,6 +369,10 @@ highlighted row through available, enabled, and disabled states. Package
 profiles appear as separate selectable rows under their package. In the Rules
 tree, cycling a file or folder node updates the full canonical rule ref behind
 that basename label.
+
+Package and profile states reflect the individual skills inside their groups.
+Enabling, disabling, or clearing a package row updates those descendants
+together; individual skills can still be changed in the Skills tree.
 
 In the Skills tree, press `enter` on a folder to expand or collapse it and
 select individual skills inside. Press `space` on a folder to cycle all its

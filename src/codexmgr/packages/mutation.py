@@ -4,7 +4,7 @@ from collections.abc import MutableMapping
 from pathlib import Path
 from typing import Any
 
-from ..core.paths import config_path, resolve_template
+from ..core.paths import config_path, global_codex_dir, resolve_template
 from ..core.toml_io import load_optional_toml_file, write_toml_file
 from ..custom_agents.config import set_agent_state_in_config
 from ..custom_agents.sources import require_agent_source
@@ -13,7 +13,7 @@ from ..hooks.sources import require_hook_source
 from ..project.config import agents_md_sources, require_codex_dir, set_agents_md_sources
 from ..rules.config import set_rule_state_in_config
 from ..rules.sources import canonical_rule_ref
-from ..skills.config import set_skill_state_in_config
+from ..skills.groups import set_skill_references_state
 from .config import PackageEntries, load_package_config, selected_package_entries
 
 
@@ -22,6 +22,8 @@ def enable_packages(
     cwd: Path,
     codexmgr_home: Path,
     profiles: list[str],
+    *,
+    codex_home: Path | None = None,
 ) -> list[str]:
     """Enable selected entries from multiple packaged configurations.
 
@@ -30,11 +32,15 @@ def enable_packages(
         cwd: Project directory whose codexmgr.toml should be updated.
         codexmgr_home: codexmgr home directory containing package sources.
         profiles: Profile names to merge into every selected package.
+        codex_home: Codex skill store; defaults to the configured global home.
 
     Returns:
         Package names that were enabled.
     """
-    return _mutate_packages(names, cwd, codexmgr_home, profiles, enabled=True)
+    return _mutate_packages(
+        names, cwd, codexmgr_home, profiles,
+        codex_home=codex_home if codex_home is not None else global_codex_dir(), enabled=True,
+    )
 
 
 def disable_packages(
@@ -42,6 +48,8 @@ def disable_packages(
     cwd: Path,
     codexmgr_home: Path,
     profiles: list[str],
+    *,
+    codex_home: Path | None = None,
 ) -> list[str]:
     """Disable selected entries from multiple packaged configurations.
 
@@ -50,11 +58,15 @@ def disable_packages(
         cwd: Project directory whose codexmgr.toml should be updated.
         codexmgr_home: codexmgr home directory containing package sources.
         profiles: Profile names to merge into every selected package.
+        codex_home: Codex skill store; defaults to the configured global home.
 
     Returns:
         Package names that were disabled.
     """
-    return _mutate_packages(names, cwd, codexmgr_home, profiles, enabled=False)
+    return _mutate_packages(
+        names, cwd, codexmgr_home, profiles,
+        codex_home=codex_home if codex_home is not None else global_codex_dir(), enabled=False,
+    )
 
 
 def enable_package(name: str, cwd: Path, codexmgr_home: Path) -> str:
@@ -91,6 +103,8 @@ def apply_package_entries_to_config(
     codexmgr_home: Path,
     *,
     enabled: bool,
+    cwd: Path,
+    codex_home: Path,
 ) -> None:
     """Apply package entry state to an in-memory project config.
 
@@ -99,13 +113,18 @@ def apply_package_entries_to_config(
         entries: Package entries selected from root and profiles.
         codexmgr_home: codexmgr home directory used to canonicalize rules.
         enabled: Whether entries should be enabled or disabled.
+        cwd: Project root used to expand skill groups.
+        codex_home: Codex skill store supplied by the invoking workflow.
     """
+    if entries.skills:
+        set_skill_references_state(
+            config, entries.skills, "enabled" if enabled else "disabled",
+            cwd, codex_home, codexmgr_home,
+        )
     if enabled:
         _add_agentsmd(config, entries.agentsmd)
     else:
         _remove_agentsmd(config, entries.agentsmd)
-    for skill in entries.skills:
-        set_skill_state_in_config(config, skill, enabled=enabled)
     for rule in entries.rules:
         set_rule_state_in_config(config, rule, codexmgr_home, enabled=enabled)
     for agent in entries.agents:
@@ -140,6 +159,7 @@ def _mutate_packages(
     profiles: list[str],
     *,
     enabled: bool,
+    codex_home: Path,
 ) -> list[str]:
     """Apply package mutations to project config with a single write.
 
@@ -149,6 +169,7 @@ def _mutate_packages(
         codexmgr_home: codexmgr home directory containing package sources.
         profiles: Profile names to merge into every package.
         enabled: Whether entries should be enabled or disabled.
+        codex_home: Codex skill store used to expand package skill groups.
 
     Returns:
         Package names that were mutated.
@@ -162,7 +183,9 @@ def _mutate_packages(
     require_codex_dir(cwd)
     config = load_optional_toml_file(config_path(cwd))
     for entries in selections:
-        apply_package_entries_to_config(config, entries, codexmgr_home, enabled=enabled)
+        apply_package_entries_to_config(
+            config, entries, codexmgr_home, enabled=enabled, cwd=cwd, codex_home=codex_home,
+        )
     write_toml_file(config_path(cwd), config)
     return list(names)
 
