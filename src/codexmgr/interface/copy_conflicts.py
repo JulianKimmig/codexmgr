@@ -31,12 +31,15 @@ def build_cli_conflict_resolver(
         Returns:
             Selected copy resolution, including abort.
         """
+        is_import = conflict.source_content is None
+        title = "New local file" if is_import else "Managed copy conflict"
+        prompt = ("Choose [k]eep project-only (remember), add to shared store [u], or [a]bort: "
+                  if is_import else "Choose [k]eep local, [o]verwrite local, [u]pdate shared source, or [a]bort: ")
         stdout.write(
-            "Managed copy conflict\n"
+            f"{title}\n"
             f"  Target: {conflict.target}\n"
             f"  Source: {conflict.source}\n"
-            "Choose [k]eep local, [o]verwrite local, "
-            "[u]pdate shared source, or [a]bort: ",
+            + prompt,
         )
         stdout.flush()
         choices = {
@@ -54,10 +57,10 @@ def build_cli_conflict_resolver(
             if answer == "":
                 return CopyResolution.ABORT
             selected = choices.get(answer.strip().lower())
-            if selected is not None:
+            if selected is not None and not (is_import and selected == CopyResolution.OVERWRITE_LOCAL):
                 return selected
             stdout.write(
-                "Choose k, o, u, or a: ",
+                "Choose k, u, or a: " if is_import else "Choose k, o, u, or a: ",
             )
             stdout.flush()
 

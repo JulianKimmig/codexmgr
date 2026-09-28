@@ -63,7 +63,7 @@ def _add_apply_parser(subparsers: argparse._SubParsersAction) -> None:
         nargs=2,
         metavar=("TARGET", "ACTION"),
         help=(
-            "Resolve one managed-copy conflict with keep-local, "
+            "Resolve a copy conflict or new local file with keep-local, "
             "overwrite-local, or update-source; repeat per target"
         ),
     )

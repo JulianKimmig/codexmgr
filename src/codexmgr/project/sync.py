@@ -21,6 +21,7 @@ class FileDiff:
         current: Current file content, or an empty string when missing.
         expected: Expected generated file content.
         binary: Whether either side could not be decoded as UTF-8 text.
+        pending_import: Whether this is an unowned local document awaiting a decision.
     """
 
     path: Path
@@ -29,6 +30,7 @@ class FileDiff:
     current: str
     expected: str
     binary: bool = False
+    pending_import: bool = False
 
 
 def generated_file_diffs(
@@ -94,6 +96,8 @@ def diffs_for_project_state(cwd: Path, state: ProjectBuild) -> list[FileDiff]:
         diff = _obsolete_file_diff(cwd, obsolete_file)
         if diff is not None:
             diffs.append(diff)
+    diffs.extend(FileDiff(item.target, _display_path(cwd, item.target), True, "", "", pending_import=True)
+                 for item in state.local_imports)
     return diffs
 
 
@@ -125,7 +129,8 @@ def check_project_sync(
         stdout.write(format_file_diffs(diffs))
     else:
         for diff in diffs:
-            stdout.write(f"Out of sync: {diff.relative_path}\n")
+            label = "Pending import" if diff.pending_import else "Out of sync"
+            stdout.write(f"{label}: {diff.relative_path}\n")
     return 1
 
 
@@ -150,6 +155,8 @@ def _format_diff(diff: FileDiff) -> list[str]:
     Returns:
         Unified diff lines preserving line endings.
     """
+    if diff.pending_import:
+        return [f"Pending import: {diff.relative_path} (new project-local file)\n"]
     if diff.binary:
         return [
             f"--- {diff.relative_path} (current)\n",

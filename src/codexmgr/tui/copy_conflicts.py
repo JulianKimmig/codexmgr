@@ -13,7 +13,7 @@ from ..project.copy_conflicts import CopyConflict, CopyResolution
 
 
 class CopyConflictScreen(ModalScreen[dict[Path, CopyResolution] | None]):
-    """Collect one non-persistent action for every managed-copy conflict.
+    """Collect explicit actions for managed-copy edits and new local documents.
 
     Args:
         conflicts: Source-backed target conflicts to present in stable order.
@@ -94,6 +94,8 @@ class CopyConflictScreen(ModalScreen[dict[Path, CopyResolution] | None]):
             action: Copy-resolution string from a binding or button.
         """
         conflict = self.conflicts[self.index]
+        if conflict.source_content is None and action == "overwrite-local":
+            return
         self.resolutions[conflict.target.absolute()] = CopyResolution(action)
         self.index += 1
         if self.index == len(self.conflicts):
@@ -129,10 +131,20 @@ class CopyConflictScreen(ModalScreen[dict[Path, CopyResolution] | None]):
             None.
         """
         conflict = self.conflicts[self.index]
+        is_import = conflict.source_content is None
+        self.query_one("#copy-conflict-title", Label).update("New local file" if is_import else "Managed copy conflict")
+        self.query_one("#overwrite-local", Button).disabled = is_import
+        self.query_one("#keep-local", Button).label = "Keep project-only [k]" if is_import else "Keep local [k]"
+        self.query_one("#update-source", Button).label = "Add to shared store [u]" if is_import else "Update shared source [u]"
+        explanation = (
+            "Keep project-only is remembered for this file. Adding it to the shared store "
+            "makes it available to other projects."
+            if is_import else "Keep local applies only to this save. Updating the source may "
+            "affect every project that uses this shared resource."
+        )
         self.query_one("#copy-conflict-detail", Static).update(
             f"Conflict {self.index + 1} of {len(self.conflicts)}\n"
             f"Target: {conflict.target}\n"
             f"Source: {conflict.source}\n\n"
-            "Keep local applies only to this save. Updating the source may "
-            "affect every project that uses this shared resource.",
+            + explanation,
         )

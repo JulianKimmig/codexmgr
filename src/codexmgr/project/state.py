@@ -8,6 +8,7 @@ from ..custom_agents.copies import AgentCopy
 from ..rules.copies import RuleCopy
 from ..guides.copies import GuideCopy
 from ..skills.copies import SkillCopy
+from .copy_conflicts import CopyConflict
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class ProjectBuild:
         guide_copies: Managed reusable guide document copies.
         obsolete_guide_copy_targets: Previously owned guide files to remove.
         guide_root: Actual project guide directory for cleanup and snapshots.
+        local_imports: New local documents requiring a publish/keep decision.
     """
 
     files: list[GeneratedFile]
@@ -58,3 +60,4 @@ class ProjectBuild:
     guide_copies: list[GuideCopy]
     obsolete_guide_copy_targets: list[Path]
     guide_root: Path
+    local_imports: list[CopyConflict]

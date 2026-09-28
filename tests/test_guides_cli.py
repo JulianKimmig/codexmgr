@@ -61,7 +61,7 @@ def test_folder_selection_tracks_added_and_removed_files(guides, read_lock):
     local = project / ".guides/games/local.txt"
     local.write_bytes(b"local")
     assert cli("apply", "--check")[0] == 1
-    assert cli("apply")[0] == 0
+    assert cli("apply", "--resolve", str(local), "keep-local")[0] == 0
     assert (project / ".guides/games/new/deep.txt").read_bytes() == b"new"
     assert not (project / ".guides/games/general/monetization").exists()
     assert local.read_bytes() == b"local"

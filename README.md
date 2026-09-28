@@ -325,6 +325,19 @@ configuration. Empty source directories need not be copied. Disabling a guide
 removes its managed copy even if edited locally; save those edits elsewhere or
 use `update-source` before disabling it.
 
+New files authored inside an enabled project guide folder are discovered on the
+next `apply` or TUI save. The same workflow applies to Rules. You can add each
+file to its shared store, keep it project-only, or abort. Only files without a
+shared counterpart or prior managed-copy ownership are offered, and disabled
+files/subfolders are excluded. This happens on apply/save, not through a
+background file watcher.
+
+For a new file, **keep project-only** is remembered in the project lockfile's
+resource-specific `project_only` list. It remains unmanaged and is not deleted
+when the folder is disabled. Remove that file's entry from the list to reconsider
+it on the next apply. Adding it to the shared store preserves its relative path
+and records managed ownership in the same apply. Neither choice is automatic.
+
 ## Packages
 
 Packages are reusable bundles of snippets, agents, hooks, skills, rules, and guides.
@@ -501,9 +514,17 @@ codexmgr apply \
   --resolve .rules/python/testing.md update-source
 ```
 
-The available actions are `keep-local`, `overwrite-local`, and
-`update-source`. These resolutions apply only to the current invocation; an
-unresolved target makes noninteractive apply fail before writes.
+The available actions for existing managed copies are `keep-local`,
+`overwrite-local`, and `update-source`. These resolutions apply only to the
+current invocation; an unresolved target makes noninteractive apply fail before
+writes.
+
+For a newly discovered local Rule or Guide, use `--resolve <target-path>
+update-source` to add it to the shared store, or `--resolve <target-path>
+keep-local` to remember it as project-only. `overwrite-local` is unavailable
+because there is no shared source yet. Interactive apply and TUI save offer
+the corresponding choices, including abort. All import and existing-copy
+decisions are collected before applying writes.
 
 `apply --check` exits with a failure if generated files are out of sync without
 writing them. `apply --diff` also avoids writing and prints unified diffs for
@@ -511,6 +532,10 @@ the expected generated-file changes. Both modes remain read-only when a managed
 copy differs from its source. A noninteractive `apply` requires an explicit
 resolution for each conflicting target and fails before writes when any target
 is unresolved.
+
+Checks and diffs also report `Pending import` for new local rules/guides without
+prompting or publishing them. Selection commands and TUI saves using `--no-sync`
+defer import decisions until an apply.
 
 The `.codex/.gitignore` managed block uses a default-ignore rule rather than a
 list of known runtime filenames. New caches, databases, sessions, and other
