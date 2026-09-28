@@ -32,7 +32,7 @@ Screen {
     border: solid #3a4658;
     padding: 1;
 }
-#rule-tree {
+#rule-tree, #skill-tree {
     height: 1fr;
     border: solid #3a4658;
     padding: 1;
@@ -70,6 +70,7 @@ NAV_LABELS = [
     "8 MCP",
     "",
     "space Cycle",
+    "enter Open/close folder",
     "s Save",
     "r Refresh",
     "q Quit",
@@ -95,6 +96,7 @@ STATE_STYLES = {
     "disabled": "yellow",
     "available": "dim",
     "partial": "cyan",
+    "mixed": "cyan",
     "configured": "blue",
     "error": "bold red",
 }

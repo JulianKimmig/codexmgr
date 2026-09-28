@@ -1,9 +1,10 @@
 """Section-specific TUI item and selection dispatch."""
 
 from ..core.errors import CommandError
+from ..skills.groups import set_skill_references_state
 from .items import agent_items, agentsmd_items, hook_items, mcp_items, package_items, rule_items, skill_items
 from .models import ManagedItem
-from .mutations import remove_agent, remove_hook, remove_rule, remove_skill
+from .mutations import remove_agent, remove_hook, remove_rule
 from .package_refs import parse_package_value
 from .package_selection import set_package_selection
 from .state import StagedConfig
@@ -132,7 +133,7 @@ def _next_state(section: str, state: str) -> str:
     """
     if section not in TRI_STATE_SECTIONS:
         return "available" if state == "enabled" else "enabled"
-    if state == "available":
+    if state in {"available", "mixed"}:
         return "enabled"
     if state == "enabled":
         return "disabled"
@@ -140,13 +141,16 @@ def _next_state(section: str, state: str) -> str:
 
 
 def _set_skill_state(staged: StagedConfig, value: str, state: str) -> None:
-    """Set one skill row state."""
-    if state == "enabled":
-        staged.set_skill_enabled(value, True)
-    elif state == "disabled":
-        staged.set_skill_enabled(value, False)
-    else:
-        remove_skill(staged.config, value)
+    """Set a skill or group's state using staged configuration and store roots.
+
+    Args:
+        staged: Configuration receiving the change.
+        value: Skill or trailing-slash group reference.
+        state: Desired enabled, disabled, or available state.
+    """
+    set_skill_references_state(
+        staged.config, [value], state, staged.cwd, staged.codex_home, staged.codexmgr_home,
+    )
 
 
 def _set_hook_state(staged: StagedConfig, value: str, state: str) -> None:

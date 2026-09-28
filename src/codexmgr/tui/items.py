@@ -13,7 +13,7 @@ from ..packages.config import load_package_config
 from ..packages.sources import available_package_names
 from ..project.config import agents_md_sources
 from ..skills.config import _skill_lists
-from ..skills.catalog import available_skill_names
+from ..skills.groups import normalized_skill_lists
 from ..skills.sources import resolve_skill_file
 from .models import DashboardSummary, ManagedItem
 from .mcp_items import mcp_items
@@ -67,8 +67,10 @@ def skill_items(staged: StagedConfig) -> list[ManagedItem]:
     Returns:
         Sorted display items.
     """
-    enabled, disabled = _skill_lists(staged.config)
-    available = set(available_skill_names(staged.cwd, staged.codex_home, staged.codexmgr_home))
+    enabled, disabled, discovered = normalized_skill_lists(
+        staged.config, staged.cwd, staged.codex_home, staged.codexmgr_home,
+    )
+    available = set(discovered)
     names = sorted(available | set(enabled) | set(disabled))
     return [
         ManagedItem(

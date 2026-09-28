@@ -33,18 +33,6 @@ def populate_rule_tree(
     return rendered
 
 
-def rule_item_from_tree_node(node: TreeNode[ManagedItem | None]) -> ManagedItem | None:
-    """Return the selectable item attached to a Textual tree node.
-
-    Args:
-        node: Textual tree node under the reusable-rules tree.
-
-    Returns:
-        Managed item for selectable rule refs, otherwise ``None``.
-    """
-    return node.data if isinstance(node.data, ManagedItem) else None
-
-
 def _add_tree_node(
     parent: TreeNode[ManagedItem | None],
     node: RuleTreeNode,

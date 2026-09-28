@@ -11,14 +11,15 @@ from textual.widgets import Footer, Header, Label, SelectionList, Static, Tree
 from ..core.errors import CommandError
 from .focus import (
     highlighted_list_item,
-    highlighted_rule_item,
-    restore_rule_tree_focus,
+    highlighted_tree_item,
+    restore_tree_focus,
     restore_selection_list_focus,
 )
 from .models import ManagedItem
 from .panels import detail_text, status_text, title_text
 from .rendering import APP_CSS, NAV_LABELS, TUI_BINDINGS, selection_for_item
 from .rule_tree import populate_rule_tree
+from .skill_tree import populate_skill_tree
 from .sections import cycle_section_state, items_for_section, set_section_selected
 from .save_flow import TuiSaveFlowMixin
 from .state import StagedConfig, load_staged_config
@@ -85,6 +86,7 @@ class CodexMgrTui(TuiSaveFlowMixin, App[int]):
                 yield Static(id="title")
                 yield SelectionList[str](id="items")
                 yield Tree("Rules", id="rule-tree")
+                yield Tree("Skills", id="skill-tree")
                 yield Static(id="detail")
                 yield Static(id="status")
         yield Footer()
@@ -131,8 +133,9 @@ class CodexMgrTui(TuiSaveFlowMixin, App[int]):
             None.
         """
         try:
-            if self.section == "rules":
-                item = highlighted_rule_item(self.query_one("#rule-tree", Tree))
+            if self.section in {"rules", "skills"}:
+                tree_id = "rule-tree" if self.section == "rules" else "skill-tree"
+                item = highlighted_tree_item(self.query_one(f"#{tree_id}", Tree))
             else:
                 item = highlighted_list_item(
                     self.query_one("#items", SelectionList),
@@ -159,7 +162,7 @@ class CodexMgrTui(TuiSaveFlowMixin, App[int]):
         """
         if self._refreshing:
             return
-        if self.section == "rules":
+        if self.section in {"rules", "skills"}:
             return
         selected = set(event.selection_list.selected)
         enabled = selected - self._selected_values
@@ -231,14 +234,21 @@ class CodexMgrTui(TuiSaveFlowMixin, App[int]):
         Returns:
             Rendered items and optional warning text.
         """
-        if self.section == "rules":
+        skill_tree = self.query_one("#skill-tree", Tree)
+        skill_tree.display = self.section == "skills"
+        if self.section in {"rules", "skills"}:
             items.display = False
-            rule_tree.display = True
-            rendered_items = populate_rule_tree(rule_tree, self.staged)
+            rule_tree.display = self.section == "rules"
+            tree = skill_tree if self.section == "skills" else rule_tree
+            highlighted = highlighted_tree_item(tree)
+            if selection_value is None and highlighted is not None:
+                selection_value = highlighted.selection_value()
+            populate = populate_skill_tree if self.section == "skills" else populate_rule_tree
+            rendered_items = populate(tree, self.staged)
             self._rendered_items = rendered_items
             self._selected_values = set()
-            restore_rule_tree_focus(rule_tree, selection_value)
-            rule_tree.focus()
+            restore_tree_focus(tree, selection_value)
+            tree.focus()
             return rendered_items, ""
         rule_tree.display = False
         items.display = True

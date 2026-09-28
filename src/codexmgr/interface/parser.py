@@ -141,13 +141,13 @@ def _add_skill_parser(subparsers: argparse._SubParsersAction) -> None:
     skill = subparsers.add_parser("skill", help="Manage project skill configuration")
     skill_subparsers = skill.add_subparsers(dest="skill_command", required=True)
 
-    enable = skill_subparsers.add_parser("enable", help="Enable a skill")
+    enable = skill_subparsers.add_parser("enable", help="Enable skills or groups")
     _add_no_sync_argument(enable)
-    enable.add_argument("skills", nargs="+", help="Skill names or paths")
+    enable.add_argument("skills", nargs="+", help="Skill names, paths, or groups ending in /")
 
-    disable = skill_subparsers.add_parser("disable", help="Disable a skill")
+    disable = skill_subparsers.add_parser("disable", help="Disable skills or groups")
     _add_no_sync_argument(disable)
-    disable.add_argument("skills", nargs="+", help="Skill names or paths")
+    disable.add_argument("skills", nargs="+", help="Skill names, paths, or groups ending in /")
 
     skill_subparsers.add_parser("list", help="List available and configured skills")
 

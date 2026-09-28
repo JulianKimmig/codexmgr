@@ -12,7 +12,7 @@ from ..hooks.listing import hook_list_lines
 from ..hooks.sources import require_hook_source
 from ..project.apply import apply_project_config
 from ..project.config import agents_md_sources, require_codex_dir, set_agents_md_sources
-from ..skills.config import set_skill_state_in_config
+from ..skills.groups import expand_skill_references, set_skill_references_state
 from ..skills.listing import skill_list_lines
 
 
@@ -79,7 +79,7 @@ def run_skill_command(
         _write_optional_lines(stdout, skill_list_lines(cwd, codex_home, codexmgr_home))
         return 0
     enabled = args.skill_command == "enable"
-    skills = _set_skill_many(args.skills, cwd, enabled=enabled)
+    skills = _set_skill_many(args.skills, cwd, codex_home, codexmgr_home, enabled=enabled)
     verb = "Enabled" if enabled else "Disabled"
     return _finish_config_change(
         [f"{verb} {skill}" for skill in skills],
@@ -176,12 +176,16 @@ def _remove_agentsmd_many(source_ids: list[str], cwd: Path) -> list[str]:
     return list(source_ids)
 
 
-def _set_skill_many(skills: list[str], cwd: Path, *, enabled: bool) -> list[str]:
+def _set_skill_many(
+    skills: list[str], cwd: Path, codex_home: Path, codexmgr_home: Path, *, enabled: bool,
+) -> list[str]:
     """Set multiple skill states with one config write.
 
     Args:
         skills: Skill names or paths to update.
         cwd: Project directory whose codexmgr.toml should be updated.
+        codex_home: Codex store used to discover group descendants.
+        codexmgr_home: Manager store used to discover group descendants.
         enabled: Desired skill state.
 
     Returns:
@@ -189,8 +193,10 @@ def _set_skill_many(skills: list[str], cwd: Path, *, enabled: bool) -> list[str]
     """
     require_codex_dir(cwd)
     config = load_optional_toml_file(config_path(cwd))
-    for skill in skills:
-        set_skill_state_in_config(config, skill, enabled=enabled)
+    skills = expand_skill_references(skills, config, cwd, codex_home, codexmgr_home)
+    set_skill_references_state(
+        config, skills, "enabled" if enabled else "disabled", cwd, codex_home, codexmgr_home,
+    )
     write_toml_file(config_path(cwd), config)
     return list(skills)
 
