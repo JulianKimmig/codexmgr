@@ -7,6 +7,7 @@ from typing import Any
 from ..core.errors import CommandError
 from .candidates import all_named_skill_sources, skill_reference_candidates
 from .copies import SkillCopy
+from .copy_names import copy_name
 from .metadata import read_skill_name, try_read_skill_name
 from .sources import (
     CODEX_HOME_SOURCE,
@@ -92,10 +93,18 @@ def select_skill(
         )
         entry = {"name": declared_name, "enabled": enabled}
         if source.source_type == CODEXMGR_HOME_SOURCE and enabled:
+            available = _deduplicate_sources(
+                _without_managed_mirrors(
+                    all_named_skill_sources(cwd, codex_home, codexmgr_home),
+                    previous_copies,
+                )
+            )
+            name = copy_name(source, available, cwd, previous_copies)
             copy = SkillCopy(
-                source.name,
+                name,
                 source.skill_dir,
-                project_skill_dir(cwd, source.name),
+                project_skill_dir(cwd, name),
+                source.name if source.name != name else None,
             )
             return SkillSelection(entry, copy)
         return SkillSelection(entry)
@@ -203,7 +212,8 @@ def _raise_ambiguous_reference(skill: str, sources: list[SkillSource]) -> None:
     raise CommandError(
         f"Ambiguous skill reference: {skill}\n"
         f"Found:\n{details}\n"
-        "Configure an explicit path to select one."
+        "Configure an explicit path to select one. A group-qualified reference "
+        "such as set1/skill1 can select a nested skill."
     )
 
 

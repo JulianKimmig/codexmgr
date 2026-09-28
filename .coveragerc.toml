@@ -1,0 +1,11 @@
+# Branch coverage for the real CLI, TUI, and managed-resource test workflows.
+[tool.coverage.run]
+branch = true
+source = ["src/codexmgr"]
+data_file = ".cache/coverage/.coverage"
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.coverage.json]
+output = ".cache/coverage/coverage.json"

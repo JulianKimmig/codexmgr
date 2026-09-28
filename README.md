@@ -202,24 +202,37 @@ Named `AGENTS.md` snippets resolve from
 `$CODEXMGR_HOME/agentsmd/<name>.toml`. Path-like snippet values resolve
 relative to the project unless they are absolute paths.
 
-Bare skill names resolve across the project `.agents/skills`,
-`$CODEXMGR_HOME/skills`, and `$CODEX_HOME/skills` stores. If the same folder
-name exists in more than one store, apply fails and asks for an explicit path.
+Skills are discovered recursively in the project `.agents/skills`,
+`$CODEXMGR_HOME/skills`, and `$CODEX_HOME/skills` stores. Discovery stops at each
+directory containing `SKILL.md`, so bundled examples are not separate skills.
+Use a unique bare folder name such as `skill1`, or a store-relative reference
+such as `set1/skill1`. An exact store-relative match takes precedence over leaf
+name matching within that store. Ambiguous references require a qualified
+reference or an explicit path to select one source. CLI and TUI lists show
+nested skills with their store-relative references and hide duplicate rows for
+their managed project copies while the source remains available.
 The project copy recorded for an enabled `$CODEXMGR_HOME` skill is recognized
 as a managed mirror and does not create a false collision on later applies.
 
 Enabled skills from `$CODEXMGR_HOME` are copied into `.agents/skills/<name>` on
-every apply. Differing files in a known managed copy use the per-target
+every apply. Group folders organize the source collection; each skill is copied
+flat with its contents intact. If the folder name conflicts, codexmgr prefixes
+the nearest group using a hyphen: `set1/skill1` can become `set1-skill1`.
+Additional ancestor groups are prepended when needed; apply fails if no unique
+name is possible. Differing files in a known managed copy use the per-target
 conflict choices, while the overlay preserves extra local files.
-Path-like skill values can point to a `SKILL.md` file or a directory containing
-`SKILL.md`; a path-like value that does not exist is an error.
+Existing managed copies retain their assigned names on later applies.
+Explicit paths such as `./skills/skill1`, `../skill1`, `~/skills/skill1`, or an
+absolute path can point to `SKILL.md` or its containing directory. Relative
+paths resolve from the project; a missing explicit path is an error.
 
 Project-local and copied manager-home skills generate portable `name` selectors
 using the `name` value in their `SKILL.md` YAML frontmatter. Selected skills in
 those stores must therefore have valid frontmatter and a non-empty name. Apply
 also fails if two discoverable skills declare the same generated name. Skills
-resolved directly from `$CODEX_HOME` and explicit path references keep absolute
-`path` selectors because those sources are machine-specific or explicitly
+keep their declared YAML names even when copy folders gain a group prefix.
+Skills resolved directly from `$CODEX_HOME` and explicit path references keep
+absolute `path` selectors because those sources are machine-specific or explicitly
 requested. Missing bare names remain name-based entries so Codex can resolve
 them later from another installed source.
 
@@ -228,7 +241,8 @@ source `codexmgr_home` and project-relative targets. Apply derives their paths
 from the current `$CODEXMGR_HOME` and project root, accepts legacy absolute copy
 entries, and rewrites them in portable form. Moving or cloning a project
 therefore does not churn generated lock state or direct cleanup into an old
-clone.
+clone. Nested skill copies additionally record `source_path` relative to the
+source store's `skills/` directory, independently of the flattened target name.
 
 Named custom agents resolve from `$CODEXMGR_HOME/agents/<name>.toml`. Enabled
 agents are copied into `.codex/agents/<name>.toml`; disabled agents remove the

@@ -13,7 +13,8 @@ from ..packages.config import load_package_config
 from ..packages.sources import available_package_names
 from ..project.config import agents_md_sources
 from ..skills.config import _skill_lists
-from ..skills.sources import available_skill_names, resolve_skill_file
+from ..skills.catalog import available_skill_names
+from ..skills.sources import resolve_skill_file
 from .models import DashboardSummary, ManagedItem
 from .mcp_items import mcp_items
 from .package_refs import package_profile_value, package_value

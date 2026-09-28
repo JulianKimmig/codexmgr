@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from .discovery import matching_paths, skill_paths
 from .sources import (
     CODEX_HOME_SOURCE,
     CODEXMGR_HOME_SOURCE,
@@ -9,7 +10,6 @@ from .sources import (
     PATH_SOURCE,
     SkillSource,
     is_named_skill,
-    project_skill_dir,
 )
 
 
@@ -22,7 +22,7 @@ def skill_reference_candidates(
     """Return every existing source matching one configured reference.
 
     Args:
-        skill: Bare skill name or explicit path reference.
+        skill: Bare name, group-qualified reference, or explicit path.
         cwd: Project directory used for local and relative-path skills.
         codex_home: Codex home directory.
         codexmgr_home: codexmgr home directory.
@@ -30,8 +30,9 @@ def skill_reference_candidates(
     Returns:
         Matching sources in stable store-priority order.
     """
-    if is_named_skill(skill):
-        return _named_skill_candidates(skill, cwd, codex_home, codexmgr_home)
+    candidates = _named_skill_candidates(skill, cwd, codex_home, codexmgr_home)
+    if candidates or is_named_skill(skill):
+        return candidates
     source = _resolve_path_skill(skill, cwd)
     return [] if source is None else [source]
 
@@ -58,7 +59,7 @@ def all_named_skill_sources(
     ]
     sources: list[SkillSource] = []
     for source_type, root in stores:
-        for name in _skill_names(root):
+        for name in skill_paths(root):
             skill_file = root / name / "SKILL.md"
             sources.append(SkillSource(name, skill_file.resolve(), source_type))
     return sources
@@ -70,10 +71,10 @@ def _named_skill_candidates(
     codex_home: Path,
     codexmgr_home: Path,
 ) -> list[SkillSource]:
-    """Return every store source whose folder matches a bare name.
+    """Return store sources matching a qualified reference or bare leaf name.
 
     Args:
-        name: Bare skill folder name.
+        name: Bare skill folder name or group-qualified reference.
         cwd: Project directory used for local skills.
         codex_home: Codex home directory.
         codexmgr_home: codexmgr home directory.
@@ -81,24 +82,16 @@ def _named_skill_candidates(
     Returns:
         Existing sources in codexmgr-home, Codex-home, then project order.
     """
-    candidates = [
-        SkillSource(
-            name,
-            (codexmgr_home / "skills" / name / "SKILL.md").resolve(),
-            CODEXMGR_HOME_SOURCE,
-        ),
-        SkillSource(
-            name,
-            (codex_home / "skills" / name / "SKILL.md").resolve(),
-            CODEX_HOME_SOURCE,
-        ),
-        SkillSource(
-            name,
-            (project_skill_dir(cwd, name) / "SKILL.md").resolve(),
-            LOCAL_SOURCE,
-        ),
+    stores = [
+        (CODEXMGR_HOME_SOURCE, codexmgr_home / "skills"),
+        (CODEX_HOME_SOURCE, codex_home / "skills"),
+        (LOCAL_SOURCE, cwd / ".agents" / "skills"),
     ]
-    return [candidate for candidate in candidates if candidate.skill_file.is_file()]
+    return [
+        SkillSource(reference, (root / reference / "SKILL.md").resolve(), kind)
+        for kind, root in stores
+        for reference in matching_paths(root, name)
+    ]
 
 
 def _resolve_path_skill(skill: str, cwd: Path) -> SkillSource | None:
@@ -118,21 +111,3 @@ def _resolve_path_skill(skill: str, cwd: Path) -> SkillSource | None:
     if not skill_file.is_file():
         return None
     return SkillSource(skill, skill_file.resolve(), PATH_SOURCE)
-
-
-def _skill_names(skills_dir: Path) -> list[str]:
-    """Return sorted child-folder names containing a skill file.
-
-    Args:
-        skills_dir: Store directory containing named skill folders.
-
-    Returns:
-        Sorted folder names with an immediate ``SKILL.md`` child.
-    """
-    if not skills_dir.is_dir():
-        return []
-    return sorted(
-        path.name
-        for path in skills_dir.iterdir()
-        if path.is_dir() and (path / "SKILL.md").is_file()
-    )

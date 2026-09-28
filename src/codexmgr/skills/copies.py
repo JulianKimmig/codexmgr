@@ -8,6 +8,7 @@ from typing import Any
 
 from ..core.errors import CommandError
 from ..core.toml_io import plain_toml_value
+from .discovery import is_store_reference
 from .sources import CODEXMGR_HOME_SOURCE, project_skill_dir
 
 
@@ -16,14 +17,16 @@ class SkillCopy:
     """A managed skill directory copy.
 
     Attributes:
-        name: Bare skill name.
+        name: Assigned flat destination folder name.
         source: Source skill directory under CODEXMGR_HOME.
         target: Project-local .agents skill directory.
+        source_path: Optional store-relative source directory for grouped skills.
     """
 
     name: str
     source: Path
     target: Path
+    source_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -59,7 +62,10 @@ def validate_copy_targets(
     """
     previous = previous_skill_copies(previous_lock, cwd, codexmgr_home)
     for copy in copies:
-        if copy.name not in previous and copy.target.exists():
+        owned = previous.get(copy.name)
+        if copy.target.exists() and (
+            owned is None or owned.source.resolve() != copy.source.resolve()
+        ):
             raise CommandError(
                 f"Refusing to overwrite unmanaged skill copy: {copy.target}"
             )
@@ -133,6 +139,7 @@ def copy_lock_entries(copies: list[SkillCopy]) -> list[dict[str, str]]:
             "name": copy.name,
             "source": CODEXMGR_HOME_SOURCE,
             "target": f".agents/skills/{copy.name}",
+            **({"source_path": copy.source_path} if copy.source_path is not None else {}),
         }
         for copy in copies
     ]
@@ -218,10 +225,16 @@ def _copy_from_lock_entry(
         raise CommandError(
             "codexmgr.lock skills.copies entries must use a safe skill name"
         )
+    source_path = raw_copy.get("source_path", name)
+    if not isinstance(source_path, str) or not is_store_reference(source_path):
+        raise CommandError(
+            "codexmgr.lock skills.copies entries must use a safe skill source path"
+        )
     return SkillCopy(
         name,
-        codexmgr_home / "skills" / name,
+        codexmgr_home / "skills" / source_path,
         project_skill_dir(cwd, name),
+        source_path if source_path != name else None,
     )
 
 

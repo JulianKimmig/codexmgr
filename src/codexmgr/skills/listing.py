@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import _skill_lists
-from .sources import available_skill_names, resolve_skill_file
+from .catalog import available_skill_names
+from .sources import resolve_skill_file
 from ..core.paths import config_path
 from ..core.toml_io import load_optional_toml_file
 
