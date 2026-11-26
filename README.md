@@ -5,6 +5,8 @@ snippets, skills, hooks, custom agents, rule files, packages, and reusable MCP
 source files in one manager home, then sync the selected pieces into each
 project from `.codex/codexmgr.toml`.
 
+See the [changelog](CHANGELOG.md) for release history and upgrade instructions.
+
 The tool is for people who use Codex in several repositories and do not want to
 copy the same agent instructions by hand. When a shared rule changes, update it
 once in `$CODEXMGR_HOME` and apply it wherever that project has opted in.
@@ -25,6 +27,16 @@ The basic model has three parts:
 - `.codex/codexmgr.toml` records what the current project wants to use
 - `codexmgr apply` resolves the selected inputs and writes the project files
   Codex reads
+
+## Contributing
+
+For changes that affect users, integrations, or operations, update
+`Unreleased` in the changelog in the same PR. Describe the behavior,
+who it affects, and any upgrade steps. For internal-only changes, give a
+short reason for skipping the entry in the PR.
+
+Use `$maintain-changelog` in Codex for the full contributor and release
+guidelines if the changelog package is enabled in your checkout.
 
 ## Requirements
 
@@ -655,9 +667,14 @@ written below the ignored `.codex/.runtime` directory. User-provided `-c` and
 
 The wrapper links the global authentication file into
 `.codex/.runtime/auth.json`. It uses `CODEX_GLOBAL_AUTH` when that variable is
-non-empty and otherwise uses `$HOME/.codex/auth.json`. A missing auth source
+non-empty and otherwise uses `.codex/auth.json` under `HOME` or the platform's
+default user home when `HOME` is unset or empty. A missing auth source
 produces a warning but does not stop Codex, which can then authenticate within
-the project runtime home.
+the project runtime home. If Windows denies permission to create the auth link,
+the wrapper continues with project-local authentication. Sign in for the
+project if Codex prompts you, or enable Developer Mode in Windows Settings to
+allow symlinks. In an interactive terminal, the warning waits for Enter before
+Codex opens.
 
 Use `--simple` immediately after `codex` to run the basic command without
 applying project state, changing the child `CODEX_HOME`, or managing an auth

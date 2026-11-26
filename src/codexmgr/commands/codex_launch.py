@@ -4,6 +4,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TextIO
 
 from ..core.paths import project_codex_dir, project_codex_runtime_dir
@@ -40,13 +41,16 @@ def build_project_codex_environment(
     cwd: Path,
     stderr: TextIO,
     environ: Mapping[str, str] | None = None,
+    *,
+    stdin: TextIO | None = None,
 ) -> dict[str, str]:
     """Build the child environment for a project-local Codex launch.
 
     Args:
         cwd: Project directory whose local Codex home may be selected.
-        stderr: Stream that receives a missing-auth warning.
+        stderr: Stream that receives authentication warnings.
         environ: Source process environment, or ``os.environ`` when omitted.
+        stdin: Optional terminal input for acknowledging the Windows auth warning.
 
     Returns:
         A copied child environment. ``CODEX_HOME`` points to
@@ -63,7 +67,22 @@ def build_project_codex_environment(
     environment["CODEX_HOME"] = str(runtime_dir)
     global_auth = _global_auth_path(environment)
     if global_auth.is_file():
-        _replace_auth_link(runtime_dir / "auth.json", global_auth)
+        auth_link = runtime_dir / "auth.json"
+        try:
+            _replace_auth_link(auth_link, global_auth)
+        except OSError as exc:
+            if getattr(exc, "winerror", None) != 1314:  # ERROR_PRIVILEGE_NOT_HELD
+                raise
+            if not auth_link.is_file():
+                stderr.write(
+                    "codexmgr codex: warning: Windows denied permission to link "
+                    "global auth. Sign in to Codex for this project if prompted, "
+                    "or enable Developer Mode in Windows Settings to allow symlinks.\n"
+                )
+                if stdin is not None and stdin.isatty() and stderr.isatty():
+                    stderr.write("Press Enter to continue.\n")
+                    stderr.flush()
+                    stdin.readline()
     else:
         stderr.write(
             "codexmgr codex: warning: no global auth found at "
@@ -76,15 +95,18 @@ def _global_auth_path(environment: Mapping[str, str]) -> Path:
     """Resolve the read-only global authentication source.
 
     Args:
-        environment: Launch environment containing HOME and optional override.
+        environment: Launch environment with optional HOME and auth overrides.
 
     Returns:
-        ``CODEX_GLOBAL_AUTH`` when non-empty, otherwise HOME's Codex auth path.
+        ``CODEX_GLOBAL_AUTH`` when non-empty, otherwise the Codex auth path under
+        ``HOME`` or the platform's default user home.
     """
     configured_auth = environment.get("CODEX_GLOBAL_AUTH")
     if configured_auth:
         return Path(configured_auth)
-    return Path(environment["HOME"]) / ".codex" / "auth.json"
+    configured_home = environment.get("HOME")
+    user_home = Path(configured_home) if configured_home else Path.home()
+    return user_home / ".codex" / "auth.json"
 
 
 def _replace_auth_link(auth_link: Path, global_auth: Path) -> None:
@@ -95,8 +117,10 @@ def _replace_auth_link(auth_link: Path, global_auth: Path) -> None:
         global_auth: Existing global authentication source file.
 
     Returns:
-        None. Any existing file or symbolic link at ``auth_link`` is replaced.
+        None. Any existing file or symbolic link at ``auth_link`` is replaced
+        after the new link is created.
     """
-    if auth_link.exists() or auth_link.is_symlink():
-        auth_link.unlink()
-    auth_link.symlink_to(global_auth)
+    with TemporaryDirectory(prefix=".auth-", dir=auth_link.parent) as staging_dir:
+        staged_link = Path(staging_dir) / auth_link.name
+        staged_link.symlink_to(global_auth)
+        staged_link.replace(auth_link)
