@@ -179,8 +179,9 @@ scope and implementation map.
 
 `.codex/codexmgr.toml` can opt into each resource type independently. A minimal
 file may only contain `[agents_md]`; larger projects can add skills, custom
-agents, hooks, reusable rules, and MCP sources or overlays as needed. Package commands
-write those same tables rather than a separate package table.
+agents, hooks, reusable rules, and MCP sources or overlays as needed. Package
+commands update the resource tables and record explicit selections in
+`[package_selections]`.
 
 ```toml
 [agents_md]
@@ -376,6 +377,22 @@ guides = ["games/advanced/performance.md"]
 The `agents` list enables custom agents from
 `$CODEXMGR_HOME/agents/<name>.toml`.
 
+Use `packages` to include other packages by name. A `programming` package
+can include `changelog` at the root and add `python-checks` when the Python
+profile is selected.
+
+```toml
+packages = ["changelog"]
+
+[profiles.python]
+packages = ["python-checks"]
+```
+
+Each include contributes the included package's root entries and follows its
+own includes recursively. A section's entries come first, followed by its
+includes in declaration order. Repeated resources are applied once. Select
+profiles explicitly to apply their entries and includes.
+
 The `skills` list accepts individual skills and store-relative folder groups
 ending in `/`, in both the root package and profiles. For example, a Phaser
 package can contain:
@@ -404,9 +421,11 @@ snapshotting, so unrelated links cannot be changed by restoration.
 `.codex/codexmgr.toml` as if the corresponding resource commands had been run.
 
 `codexmgr package disable <name>` removes package `AGENTS.md` entries when
-present and disables the package skills, hooks, agents, rules, and guides. Package state
-is not tracked separately; the resulting project config tables remain the
-source of truth.
+present and disables the package skills, hooks, agents, rules, and guides
+that are unshared. Resources also used by another explicitly enabled package
+or profile stay active. Re-enable packages already in use to record their
+selections for shared-resource protection. Re-enabling records added resources,
+and disabling uses the recorded contributions even if a manifest has changed.
 
 Profiles are merged with the root package entries:
 

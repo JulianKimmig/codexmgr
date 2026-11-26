@@ -4,6 +4,10 @@ This file records changes to the codexmgr Python package and CLI. codexmgr uses 
 
 ## Unreleased
 
+### Added
+
+- Include other packages with `packages = ["name"]` in a package manifest or profile. CLI and TUI package removal preserve resources shared by other recorded package selections. Re-enable packages already in use to record their selections.
+
 ### Fixed
 
 - `codexmgr codex` continues with project-local authentication if the OS cannot create the global auth symlink, including on Windows mapped network drives. Sign in for the project if Codex prompts you.

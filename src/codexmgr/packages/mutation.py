@@ -1,23 +1,11 @@
 """Apply package enable and disable mutations to project config."""
 
-from collections.abc import MutableMapping
-from copy import deepcopy
 from pathlib import Path
-from typing import Any
 
-from ..core.paths import config_path, global_codex_dir, resolve_template
+from ..core.paths import config_path, global_codex_dir
 from ..core.toml_io import load_optional_toml_file, write_toml_file
-from ..custom_agents.config import set_agent_state_in_config
-from ..custom_agents.sources import require_agent_source
-from ..hooks.config import set_hook_state_in_config
-from ..hooks.sources import require_hook_source
-from ..project.config import agents_md_sources, require_codex_dir, set_agents_md_sources
-from ..rules.config import set_rule_state_in_config
-from ..guides.config import set_guide_state_in_config
-from ..guides.sources import canonical_guide_ref
-from ..rules.sources import canonical_rule_ref
-from ..skills.groups import set_skill_references_state
-from .config import PackageEntries, load_package_config, selected_package_entries
+from ..project.config import require_codex_dir
+from .operations import PackageWorkspace, update_package_selections
 
 
 def enable_packages(
@@ -100,66 +88,6 @@ def disable_package(name: str, cwd: Path, codexmgr_home: Path) -> str:
     return disable_packages([name], cwd, codexmgr_home, [])[0]
 
 
-def apply_package_entries_to_config(
-    config: MutableMapping[str, Any],
-    entries: PackageEntries,
-    codexmgr_home: Path,
-    *,
-    enabled: bool,
-    cwd: Path,
-    codex_home: Path,
-) -> None:
-    """Apply package entry state to an in-memory project config.
-
-    Args:
-        config: Parsed project config to mutate.
-        entries: Package entries selected from root and profiles.
-        codexmgr_home: codexmgr home directory used to canonicalize rules.
-        enabled: Whether entries should be enabled or disabled.
-        cwd: Project root used to expand skill groups.
-        codex_home: Codex skill store supplied by the invoking workflow.
-    """
-    target = config
-    config = deepcopy(config)
-    for guide in entries.guides:
-        set_guide_state_in_config(config, guide, codexmgr_home, enabled=enabled)
-    if entries.skills:
-        set_skill_references_state(
-            config, entries.skills, "enabled" if enabled else "disabled",
-            cwd, codex_home, codexmgr_home,
-        )
-    if enabled:
-        _add_agentsmd(config, entries.agentsmd)
-    else:
-        _remove_agentsmd(config, entries.agentsmd)
-    for rule in entries.rules:
-        set_rule_state_in_config(config, rule, codexmgr_home, enabled=enabled)
-    for agent in entries.agents:
-        set_agent_state_in_config(config, agent, enabled=enabled)
-    for hook in entries.hooks:
-        set_hook_state_in_config(config, hook, enabled=enabled)
-    target.update(config)
-
-
-def selected_entries_for_package(
-    name: str,
-    codexmgr_home: Path,
-    profiles: list[str],
-) -> PackageEntries:
-    """Load a package and return entries for selected profiles.
-
-    Args:
-        name: Bare package name.
-        codexmgr_home: codexmgr home directory containing package sources.
-        profiles: Profile names to merge.
-
-    Returns:
-        Root package entries plus selected profile entries.
-    """
-    package = load_package_config(name, codexmgr_home)
-    return selected_package_entries(package, profiles)
-
-
 def _mutate_packages(
     names: list[str],
     cwd: Path,
@@ -182,73 +110,12 @@ def _mutate_packages(
     Returns:
         Package names that were mutated.
     """
-    selections = [
-        selected_entries_for_package(name, codexmgr_home, profiles) for name in names
-    ]
-    if enabled:
-        for entries in selections:
-            _validate_enable_sources(entries, cwd, codexmgr_home)
     require_codex_dir(cwd)
     config = load_optional_toml_file(config_path(cwd))
-    for entries in selections:
-        apply_package_entries_to_config(
-            config, entries, codexmgr_home, enabled=enabled, cwd=cwd, codex_home=codex_home,
-        )
+    requested = [(name, profile) for name in names for profile in (None, *profiles)]
+    update_package_selections(
+        config, requested, PackageWorkspace(cwd, codex_home, codexmgr_home),
+        state="enabled" if enabled else "disabled",
+    )
     write_toml_file(config_path(cwd), config)
     return list(names)
-
-
-def _validate_enable_sources(
-    entries: PackageEntries,
-    cwd: Path,
-    codexmgr_home: Path,
-) -> None:
-    """Validate package references that direct enable commands validate.
-
-    Args:
-        entries: Selected package entries.
-        cwd: Project directory used to resolve path-backed AGENTS.md templates.
-        codexmgr_home: codexmgr home directory used to resolve named sources.
-    """
-    for reference in entries.agentsmd:
-        resolve_template(reference, cwd, codexmgr_home)
-    for agent in entries.agents:
-        require_agent_source(agent, codexmgr_home)
-    for hook in entries.hooks:
-        require_hook_source(hook, codexmgr_home)
-    for rule in entries.rules:
-        canonical_rule_ref(rule, codexmgr_home)
-    for guide in entries.guides:
-        canonical_guide_ref(guide, codexmgr_home)
-
-
-def _add_agentsmd(config: MutableMapping[str, Any], references: list[str]) -> None:
-    """Add AGENTS.md references to a parsed project config.
-
-    Args:
-        config: Parsed codexmgr.toml data to mutate.
-        references: AGENTS.md template references to add.
-    """
-    if not references:
-        return
-    sources = agents_md_sources(config)
-    for reference in references:
-        if reference not in sources:
-            sources.append(reference)
-    set_agents_md_sources(config, sources)
-
-
-def _remove_agentsmd(config: MutableMapping[str, Any], references: list[str]) -> None:
-    """Remove AGENTS.md references from a parsed project config.
-
-    Args:
-        config: Parsed codexmgr.toml data to mutate.
-        references: AGENTS.md template references to remove when present.
-    """
-    if not references:
-        return
-    removed = set(references)
-    set_agents_md_sources(
-        config,
-        [source for source in agents_md_sources(config) if source not in removed],
-    )

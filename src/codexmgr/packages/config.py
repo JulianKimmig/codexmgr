@@ -1,7 +1,7 @@
 """Load and validate codexmgr packaged configuration files."""
 
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +9,8 @@ from ..core.errors import CommandError
 from ..core.toml_io import load_toml_file, plain_toml_value
 from .sources import require_package_config
 
-SUPPORTED_KEYS = ("agentsmd", "agents", "hooks", "skills", "rules", "guides")
+RESOURCE_KEYS = ("agentsmd", "agents", "hooks", "skills", "rules", "guides")
+SUPPORTED_KEYS = (*RESOURCE_KEYS, "packages")
 TOP_LEVEL_KEYS = (*SUPPORTED_KEYS, "profiles")
 
 
@@ -24,6 +25,7 @@ class PackageEntries:
         skills: Skill references to enable or disable.
         rules: Reusable rule refs to enable or disable.
         guides: Persistent guide file or folder selections.
+        packages: Names of included packages.
     """
 
     agentsmd: list[str]
@@ -32,6 +34,7 @@ class PackageEntries:
     skills: list[str]
     rules: list[str]
     guides: list[str]
+    packages: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,7 @@ class PackageConfig:
         rules: Reusable rule refs to enable or disable.
         guides: Persistent guide file or folder selections.
         profiles: Optional named profile entries keyed by profile name.
+        packages: Names of packages included by the root section.
     """
 
     name: str
@@ -57,6 +61,7 @@ class PackageConfig:
     rules: list[str]
     guides: list[str]
     profiles: dict[str, PackageEntries]
+    packages: list[str] = field(default_factory=list)
 
 
 def load_package_config(name: str, codexmgr_home: Path) -> PackageConfig:
@@ -94,7 +99,7 @@ def parse_package_config(
     if not any(key in data for key in TOP_LEVEL_KEYS):
         raise CommandError(
             "Package config must include agentsmd, agents, hooks, skills, "
-            f"rules, guides, or profiles: {path}"
+            f"rules, guides, packages, or profiles: {path}"
         )
     return PackageConfig(
         name=name,
@@ -105,48 +110,36 @@ def parse_package_config(
         rules=_string_list(data, "rules", path),
         guides=_string_list(data, "guides", path),
         profiles=_profiles(data, path),
+        packages=_string_list(data, "packages", path),
     )
 
 
-def selected_package_entries(
-    package: PackageConfig,
-    profile_names: list[str],
-) -> PackageEntries:
-    """Return root package entries plus the requested profile entries.
+def root_package_entries(package: PackageConfig) -> PackageEntries:
+    """Return the entries declared in a package's root section.
 
     Args:
         package: Loaded package configuration.
-        profile_names: Profile names to merge into the selected entries.
 
     Returns:
-        Dedupe-preserving combined package entries.
+        Root resource and include references.
     """
-    agentsmd = list(package.agentsmd)
-    agents = list(package.agents)
-    hooks = list(package.hooks)
-    skills = list(package.skills)
-    rules = list(package.rules)
-    guides = list(package.guides)
-    for profile_name in profile_names:
-        profile = package.profiles.get(profile_name)
-        if profile is None:
-            raise CommandError(
-                f"Package profile not found: {package.name}.{profile_name}"
-            )
-        agentsmd = _append_unique(agentsmd, profile.agentsmd)
-        agents = _append_unique(agents, profile.agents)
-        hooks = _append_unique(hooks, profile.hooks)
-        skills = _append_unique(skills, profile.skills)
-        rules = _append_unique(rules, profile.rules)
-        guides = _append_unique(guides, profile.guides)
-    return PackageEntries(
-        agentsmd=agentsmd,
-        agents=agents,
-        hooks=hooks,
-        skills=skills,
-        rules=rules,
-        guides=guides,
-    )
+    return PackageEntries(**{key: getattr(package, key) for key in SUPPORTED_KEYS})
+
+
+def merge_package_resources(entries: Iterable[PackageEntries]) -> PackageEntries:
+    """Merge resource lists in first-seen order.
+
+    Args:
+        entries: Sections in application order.
+
+    Returns:
+        Combined resources with duplicate references removed.
+    """
+    values = {key: {} for key in RESOURCE_KEYS}
+    for section in entries:
+        for key in RESOURCE_KEYS:
+            values[key].update(dict.fromkeys(getattr(section, key)))
+    return PackageEntries(**{key: list(refs) for key, refs in values.items()})
 
 
 def _profiles(data: Mapping[str, Any], path: Path) -> dict[str, PackageEntries]:
@@ -171,46 +164,28 @@ def _profiles(data: Mapping[str, Any], path: Path) -> dict[str, PackageEntries]:
             raise CommandError(
                 f"Unsupported package profile key: {name}.{unsupported[0]}"
             )
-        parsed[name] = PackageEntries(
-            agentsmd=_string_list(table, "agentsmd", path),
-            agents=_string_list(table, "agents", path),
-            hooks=_string_list(table, "hooks", path),
-            skills=_string_list(table, "skills", path),
-            rules=_string_list(table, "rules", path),
-            guides=_string_list(table, "guides", path),
-        )
+        parsed[name] = PackageEntries(**{
+            key: _string_list(table, key, path, label=f"profiles.{name}.{key}")
+            for key in SUPPORTED_KEYS
+        })
     return parsed
 
 
-def _string_list(data: Mapping[str, Any], key: str, path: Path) -> list[str]:
+def _string_list(
+    data: Mapping[str, Any], key: str, path: Path, *, label: str | None = None,
+) -> list[str]:
     """Read one package string-list field.
 
     Args:
         data: Parsed package TOML mapping.
         key: Supported package key to read.
         path: Source config path used in error messages.
+        label: Optional section-qualified name for diagnostics.
 
     Returns:
         A shallow copy of the configured string list, or an empty list.
     """
     value = plain_toml_value(data.get(key, []))
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        raise CommandError(f"{path} {key} must be a list of strings")
+        raise CommandError(f"{path} {label or key} must be a list of strings")
     return list(value)
-
-
-def _append_unique(values: list[str], additions: list[str]) -> list[str]:
-    """Append missing additions while preserving first-seen order.
-
-    Args:
-        values: Existing values.
-        additions: Candidate values to append.
-
-    Returns:
-        Combined list without duplicate entries.
-    """
-    combined = list(values)
-    for addition in additions:
-        if addition not in combined:
-            combined.append(addition)
-    return combined

@@ -1,6 +1,6 @@
 """Resolve packaged configuration sources from CODEXMGR_HOME."""
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from ..core.errors import CommandError
 
@@ -74,7 +74,11 @@ def is_bare_package_name(name: str) -> bool:
         name: Package reference from the CLI.
 
     Returns:
-        True when the reference has no path separators and is not empty.
+        True when the reference is a single directory name on supported platforms.
     """
     raw = name.strip()
-    return bool(raw) and "/" not in raw and "\\" not in raw
+    return (
+        bool(raw) and raw not in {".", ".."}
+        and not any(character in name for character in ("/", "\\", "\0"))
+        and not PureWindowsPath(name).drive
+    )

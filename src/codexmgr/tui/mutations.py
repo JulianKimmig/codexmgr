@@ -1,46 +1,17 @@
 """Low-level staged mutation helpers for the TUI."""
 
 from collections.abc import MutableMapping
-from pathlib import Path
 from typing import Any
 
 from ..custom_agents.config import agent_lists
-from ..custom_agents.sources import require_agent_source
-from ..core.paths import resolve_template
 from ..core.toml_io import ensure_toml_table
 from ..hooks.config import hook_lists
-from ..hooks.sources import require_hook_source
 from ..mcp.project import mcp_source_names
 from ..packages.config import PackageEntries
 from ..project.config import agents_md_sources
 from ..rules.config import rule_lists
-from ..rules.sources import canonical_rule_ref
-from ..guides.sources import canonical_guide_ref
 from ..skills.config import _skill_lists
 
-
-def validate_package_enable(
-    entries: PackageEntries,
-    cwd: Path,
-    codexmgr_home: Path,
-) -> None:
-    """Validate package references that require enable-time validation.
-
-    Args:
-        entries: Package entries to validate.
-        cwd: Project directory used for path-backed AGENTS.md templates.
-        codexmgr_home: Codexmgr home containing reusable resources.
-    """
-    for reference in entries.agentsmd:
-        resolve_template(reference, cwd, codexmgr_home)
-    for agent in entries.agents:
-        require_agent_source(agent, codexmgr_home)
-    for hook in entries.hooks:
-        require_hook_source(hook, codexmgr_home)
-    for rule in entries.rules:
-        canonical_rule_ref(rule, codexmgr_home)
-    for guide in entries.guides:
-        canonical_guide_ref(guide, codexmgr_home)
 
 
 def package_checks(

@@ -78,6 +78,12 @@ skills = ["repo-rule-manager"]
         "agents": {"enabled": ["rule-retriever"], "disabled": []},
         "skills": {"enabled": ["repo-rule-manager"], "disabled": []},
         "hooks": {"enabled": ["repo-rules"], "disabled": []},
+        "package_selections": {"repo-rules": {"root": {
+            "agentsmd": ["coding"],
+            "agents": ["rule-retriever"],
+            "hooks": ["repo-rules"],
+            "skills": ["repo-rule-manager"],
+        }}},
     }
     assert_agents_md(project, "# rules\nrendered\n")
     agent_file = project / ".codex" / "agents" / "rule-retriever.toml"
@@ -122,6 +128,7 @@ def test_package_agents_list_enables_and_copies_custom_agent(
     )
     assert read_project_config(project) == {
         "agents": {"enabled": ["reviewer"], "disabled": []},
+        "package_selections": {"agents-only": {"root": {"agents": ["reviewer"]}}},
     }
     assert (project / ".codex" / "agents" / "reviewer.toml").read_text(
         encoding="utf-8",

@@ -1,22 +1,16 @@
 """Package-related staged configuration helpers for the TUI."""
 
 from collections.abc import MutableMapping
-from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from ..packages.config import PackageConfig, PackageEntries, load_package_config
-from ..packages.mutation import apply_package_entries_to_config
-from ..project.config import agents_md_sources, set_agents_md_sources
-from ..skills.groups import set_skill_references_state, skill_reference_states
-from ..guides.config import guide_reference_states, remove_guide
-from .mutations import (
-    package_checks,
-    remove_agent,
-    remove_hook,
-    remove_rule,
-    validate_package_enable,
+from ..guides.config import guide_reference_states
+from ..packages.config import PackageEntries
+from ..packages.operations import (
+    PackageWorkspace, package_selection_display_entries, update_package_selections,
 )
+from ..skills.groups import skill_reference_states
+from .mutations import package_checks
 
 
 def set_package_enabled(
@@ -37,8 +31,10 @@ def set_package_enabled(
         codexmgr_home: Codexmgr home containing reusable resources.
         codex_home: Codex skill store used for group expansion.
     """
-    package = load_package_config(name, codexmgr_home)
-    _set_package_entries(config, _root_entries(package), enabled, cwd, codexmgr_home, codex_home)
+    update_package_selections(
+        config, [(name, None)], PackageWorkspace(cwd, codex_home, codexmgr_home),
+        state="enabled" if enabled else "disabled",
+    )
 
 
 def set_package_profile_enabled(
@@ -61,8 +57,10 @@ def set_package_profile_enabled(
         codexmgr_home: Codexmgr home containing reusable resources.
         codex_home: Codex skill store used for group expansion.
     """
-    package = load_package_config(name, codexmgr_home)
-    _set_package_entries(config, package.profiles[profile], enabled, cwd, codexmgr_home, codex_home)
+    update_package_selections(
+        config, [(name, profile)], PackageWorkspace(cwd, codex_home, codexmgr_home),
+        state="enabled" if enabled else "disabled",
+    )
 
 
 def set_package_available(
@@ -81,8 +79,10 @@ def set_package_available(
         codexmgr_home: Codexmgr home containing reusable resources.
         codex_home: Codex skill store used for group expansion.
     """
-    package = load_package_config(name, codexmgr_home)
-    _clear_package_entries(config, _root_entries(package), cwd, codex_home, codexmgr_home)
+    update_package_selections(
+        config, [(name, None)], PackageWorkspace(cwd, codex_home, codexmgr_home),
+        state="available",
+    )
 
 
 def set_package_profile_available(
@@ -102,8 +102,10 @@ def set_package_profile_available(
         cwd: Project root used to discover group descendants.
         codex_home: Codex skill store used for group expansion.
     """
-    package = load_package_config(name, codexmgr_home)
-    _clear_package_entries(config, package.profiles[profile], cwd, codex_home, codexmgr_home)
+    update_package_selections(
+        config, [(name, profile)], PackageWorkspace(cwd, codex_home, codexmgr_home),
+        state="available",
+    )
 
 
 def package_state(
@@ -122,8 +124,8 @@ def package_state(
     Returns:
         Package state computed from staged entries.
     """
-    package = load_package_config(name, codexmgr_home)
-    return _entries_state(config, _root_entries(package), cwd, codex_home, codexmgr_home)
+    entries = package_selection_display_entries(config, (name, None), PackageWorkspace(cwd, codex_home, codexmgr_home))
+    return _entries_state(config, entries, cwd, codex_home, codexmgr_home)
 
 
 def package_profile_state(
@@ -146,68 +148,8 @@ def package_profile_state(
     Returns:
         Package profile state computed from staged entries.
     """
-    package = load_package_config(name, codexmgr_home)
-    return _entries_state(config, package.profiles[profile], cwd, codex_home, codexmgr_home)
-
-
-def _set_package_entries(
-    config: MutableMapping[str, Any],
-    entries: PackageEntries,
-    enabled: bool,
-    cwd: Path,
-    codexmgr_home: Path,
-    codex_home: Path,
-) -> None:
-    """Enable or disable package entries in staged config.
-
-    Args:
-        config: Staged project configuration.
-        entries: Package root or profile entries.
-        enabled: Whether entries should be active.
-        cwd: Project directory used for validation.
-        codexmgr_home: Codexmgr home containing reusable resources.
-        codex_home: Codex skill store used for group expansion.
-    """
-    if enabled:
-        validate_package_enable(entries, cwd, codexmgr_home)
-    apply_package_entries_to_config(
-        config, entries, codexmgr_home, enabled=enabled, cwd=cwd, codex_home=codex_home,
-    )
-
-
-def _clear_package_entries(
-    config: MutableMapping[str, Any],
-    entries: PackageEntries,
-    cwd: Path, codex_home: Path, codexmgr_home: Path,
-) -> None:
-    """Remove package entries from staged config state lists.
-
-    Args:
-        config: Staged project configuration.
-        entries: Package root or profile entries to clear.
-        cwd: Project root used to discover group descendants.
-        codex_home: Codex skill store.
-        codexmgr_home: Manager skill store.
-    """
-    target = config
-    config = deepcopy(config)
-    for guide in entries.guides:
-        remove_guide(config, guide, codexmgr_home)
-    if entries.skills:
-        set_skill_references_state(config, entries.skills, "available", cwd, codex_home, codexmgr_home)
-    if entries.agentsmd:
-        removed = set(entries.agentsmd)
-        set_agents_md_sources(
-            config,
-            [source for source in agents_md_sources(config) if source not in removed],
-        )
-    for agent in entries.agents:
-        remove_agent(config, agent)
-    for hook in entries.hooks:
-        remove_hook(config, hook)
-    for rule in entries.rules:
-        remove_rule(config, rule)
-    target.update(config)
+    entries = package_selection_display_entries(config, (name, profile), PackageWorkspace(cwd, codex_home, codexmgr_home))
+    return _entries_state(config, entries, cwd, codex_home, codexmgr_home)
 
 
 def _entries_state(
@@ -231,25 +173,6 @@ def _entries_state(
         *package_checks(config, entries, skill_states=states),
         *guide_reference_states(config, entries.guides, codexmgr_home),
     ])
-
-
-def _root_entries(package: PackageConfig) -> PackageEntries:
-    """Return root entries for a package.
-
-    Args:
-        package: Package configuration.
-
-    Returns:
-        Package root entries.
-    """
-    return PackageEntries(
-        package.agentsmd,
-        package.agents,
-        package.hooks,
-        package.skills,
-        package.rules,
-        package.guides,
-    )
 
 
 def _state_from_checks(checks: list[str]) -> str:
