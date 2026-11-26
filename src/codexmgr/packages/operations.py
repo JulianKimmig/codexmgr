@@ -8,6 +8,8 @@ from typing import Any
 
 from ..guides.config import guide_lists
 from ..guides.sources import canonical_guide_ref_if_exists, normalize_missing_guide_ref
+from ..mcp.project import mcp_source_names
+from ..mcp.sources import load_mcp_sources
 from ..rules.config import rule_lists
 from ..rules.sources import canonical_rule_ref_if_exists, normalize_missing_rule_ref
 from ..skills.groups import skill_selection_refs
@@ -115,6 +117,8 @@ def update_package_selections(
         working, combined, workspace.codexmgr_home, state=state,
         cwd=workspace.cwd, codex_home=workspace.codex_home,
     )
+    if combined.mcp:
+        load_mcp_sources(mcp_source_names(working), workspace.codexmgr_home)
     write_package_selections(working, saved)
     config.update(working)
     if SELECTIONS_KEY not in working:

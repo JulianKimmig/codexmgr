@@ -353,7 +353,8 @@ and records managed ownership in the same apply. Neither choice is automatic.
 
 ## Packages
 
-Packages are reusable bundles of snippets, agents, hooks, skills, rules, and guides.
+Packages bundle reusable snippets, agents, hooks, skills, rules, guides, and MCP
+sources.
 They resolve from `$CODEXMGR_HOME/packages/<name>/config.toml`.
 
 A package config is a TOML document with root lists and optional profile tables:
@@ -365,6 +366,7 @@ hooks = ["repo-rules"]
 skills = ["repo-rule-manager"]
 rules = ["react/"]
 guides = ["games/general/"]
+mcp = ["browsermcp"]
 [profiles.strict]
 agentsmd = ["strict-coding"]
 agents = ["strict-agent"]
@@ -372,6 +374,7 @@ hooks = ["strict-rules"]
 skills = ["strict-review"]
 rules = ["python/testing.md"]
 guides = ["games/advanced/performance.md"]
+mcp = ["context7"]
 ```
 
 The `agents` list enables custom agents from
@@ -392,6 +395,12 @@ Each include contributes the included package's root entries and follows its
 own includes recursively. A section's entries come first, followed by its
 includes in declaration order. Repeated resources are applied once. Select
 profiles explicitly to apply their entries and includes.
+
+The `mcp` list takes reusable source names from
+`$CODEXMGR_HOME/mcp/<name>.toml`. Enabling a package adds its sources to
+`[mcp].enabled`. Set project-specific server settings in
+`[mcp.servers.<id>]` in `.codex/codexmgr.toml`. Temporary package launches
+also load the selected sources for the session.
 
 The `skills` list accepts individual skills and store-relative folder groups
 ending in `/`, in both the root package and profiles. For example, a Phaser
@@ -421,8 +430,8 @@ snapshotting, so unrelated links cannot be changed by restoration.
 `.codex/codexmgr.toml` as if the corresponding resource commands had been run.
 
 `codexmgr package disable <name>` removes package `AGENTS.md` entries when
-present and disables the package skills, hooks, agents, rules, and guides
-that are unshared. Resources also used by another explicitly enabled package
+present and disables any unshared package skills, hooks, agents, rules, guides,
+and MCP sources. Resources also used by another explicitly enabled package
 or profile stay active. Re-enable packages already in use to record their
 selections for shared-resource protection. Re-enabling records added resources,
 and disabling uses the recorded contributions even if a manifest has changed.

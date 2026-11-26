@@ -542,7 +542,7 @@ def test_package_enable_rejects_unknown_package_keys(
     """package enable rejects unsupported package config keys."""
     project, codex_home = workspace
     codexmgr_home = codex_home.parent / "codexmgr-home"
-    _write_package(codexmgr_home, "bad", 'mcp = ["browsermcp"]\n')
+    _write_package(codexmgr_home, "bad", 'model = "example"\n')
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
 
     exit_code, stdout, stderr = run_cli_with_homes(
@@ -554,7 +554,7 @@ def test_package_enable_rejects_unknown_package_keys(
 
     assert exit_code == 1
     assert stdout == ""
-    assert "Unsupported package config key: mcp" in stderr
+    assert "Unsupported package config key: model" in stderr
 
 
 def test_package_enable_rejects_missing_agentsmd_before_writing(

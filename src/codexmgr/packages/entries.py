@@ -12,6 +12,7 @@ from ..guides.config import guide_lists, remove_guide, set_guide_state_in_config
 from ..guides.sources import canonical_guide_ref
 from ..hooks.config import hook_lists, set_hook_state_in_config
 from ..hooks.sources import require_hook_source
+from ..mcp.project import set_mcp_source_enabled_in_config
 from ..project.config import agents_md_sources, set_agents_md_sources
 from ..rules.config import rule_lists, set_rule_state_in_config
 from ..rules.sources import canonical_rule_ref
@@ -78,6 +79,8 @@ def apply_package_entries(
             removed = set(entries.agentsmd)
             sources = [source for source in sources if source not in removed]
         set_agents_md_sources(config, sources)
+    for name in entries.mcp:
+        set_mcp_source_enabled_in_config(config, name, enabled=enabled)
     if state == "available":
         remove_package_refs(config, "rules", entries.rules)
         remove_package_refs(config, "agents", entries.agents)

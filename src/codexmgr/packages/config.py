@@ -9,7 +9,7 @@ from ..core.errors import CommandError
 from ..core.toml_io import load_toml_file, plain_toml_value
 from .sources import require_package_config
 
-RESOURCE_KEYS = ("agentsmd", "agents", "hooks", "skills", "rules", "guides")
+RESOURCE_KEYS = ("agentsmd", "agents", "hooks", "skills", "rules", "guides", "mcp")
 SUPPORTED_KEYS = (*RESOURCE_KEYS, "packages")
 TOP_LEVEL_KEYS = (*SUPPORTED_KEYS, "profiles")
 
@@ -26,6 +26,7 @@ class PackageEntries:
         rules: Reusable rule refs to enable or disable.
         guides: Persistent guide file or folder selections.
         packages: Names of included packages.
+        mcp: Reusable MCP source names.
     """
 
     agentsmd: list[str]
@@ -35,6 +36,7 @@ class PackageEntries:
     rules: list[str]
     guides: list[str]
     packages: list[str] = field(default_factory=list)
+    mcp: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,7 @@ class PackageConfig:
         guides: Persistent guide file or folder selections.
         profiles: Optional named profile entries keyed by profile name.
         packages: Names of packages included by the root section.
+        mcp: Reusable MCP source names contributed by the root section.
     """
 
     name: str
@@ -62,6 +65,7 @@ class PackageConfig:
     guides: list[str]
     profiles: dict[str, PackageEntries]
     packages: list[str] = field(default_factory=list)
+    mcp: list[str] = field(default_factory=list)
 
 
 def load_package_config(name: str, codexmgr_home: Path) -> PackageConfig:
@@ -99,7 +103,7 @@ def parse_package_config(
     if not any(key in data for key in TOP_LEVEL_KEYS):
         raise CommandError(
             "Package config must include agentsmd, agents, hooks, skills, "
-            f"rules, guides, packages, or profiles: {path}"
+            f"rules, guides, mcp, packages, or profiles: {path}"
         )
     return PackageConfig(
         name=name,
@@ -111,6 +115,7 @@ def parse_package_config(
         guides=_string_list(data, "guides", path),
         profiles=_profiles(data, path),
         packages=_string_list(data, "packages", path),
+        mcp=_string_list(data, "mcp", path),
     )
 
 

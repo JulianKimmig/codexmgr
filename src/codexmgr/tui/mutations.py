@@ -31,21 +31,23 @@ def package_checks(
     enabled_hooks, disabled_hooks = hook_lists(config)
     enabled_rules, disabled_rules = rule_lists(config)
     sources = agents_md_sources(config)
+    enabled_mcp = mcp_source_names(config) if entries.mcp else []
     return [
-        *(_agentsmd_state(reference, sources) for reference in entries.agentsmd),
+        *(_presence_state(reference, sources) for reference in entries.agentsmd),
         *(_state(agent, enabled_agents, disabled_agents) for agent in entries.agents),
         *skill_states,
         *(_state(hook, enabled_hooks, disabled_hooks) for hook in entries.hooks),
         *(_state(rule, enabled_rules, disabled_rules) for rule in entries.rules),
+        *(_presence_state(name, enabled_mcp) for name in entries.mcp),
     ]
 
 
-def _agentsmd_state(reference: str, sources: list[str]) -> str:
-    """Return the staged state for one AGENTS.md package entry.
+def _presence_state(reference: str, sources: list[str]) -> str:
+    """Return the staged state for a package entry that has only an enabled list.
 
     Args:
-        reference: Template reference.
-        sources: Configured AGENTS.md sources.
+        reference: Template reference or MCP source name.
+        sources: Configured references for the same resource type.
 
     Returns:
         ``enabled`` when present, otherwise ``available``.
