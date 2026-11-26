@@ -18,6 +18,8 @@ def run_codex_command(
     codexmgr_home: Path,
     codex_args: list[str],
     stderr: TextIO,
+    *,
+    stdin: TextIO | None = None,
 ) -> int:
     """Select a launch mode and run the external Codex executable.
 
@@ -27,6 +29,7 @@ def run_codex_command(
         codexmgr_home: codexmgr home containing package sources.
         codex_args: Raw arguments after ``codexmgr codex``.
         stderr: Stream that receives launch warnings.
+        stdin: Optional terminal input for acknowledging launch warnings.
 
     Returns:
         The external Codex process return code.
@@ -47,7 +50,7 @@ def run_codex_command(
         Returns:
             The external Codex process return code.
         """
-        environment = build_project_codex_environment(project_cwd, stderr)
+        environment = build_project_codex_environment(project_cwd, stderr, stdin=stdin)
         return _run_subprocess(project_cwd, args, environment)
 
     if request.enabled:

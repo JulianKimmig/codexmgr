@@ -2,7 +2,10 @@
 
 import io
 import tomllib
+from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from codexmgr.commands.codex import build_codex_command
 from codexmgr.interface.cli import main
@@ -130,7 +133,12 @@ def test_codex_subcommand_uses_project_runtime_home_auth_and_return_code(
     stale_auth.write_text('{"token": "stale"}\n', encoding="utf-8")
     runtime_home = project / ".codex" / ".runtime"
     runtime_home.mkdir()
-    (runtime_home / "auth.json").symlink_to(stale_auth)
+    try:
+        (runtime_home / "auth.json").symlink_to(stale_auth)
+    except OSError as exc:
+        if getattr(exc, "winerror", None) != 1314:
+            raise
+        pytest.skip("Windows denied permission to create symlinks")
     monkeypatch.delenv("CODEX_GLOBAL_AUTH", raising=False)
     monkeypatch.setenv("HOME", str(user_home))
     monkeypatch.setenv("CODEXMGR_LAUNCH_TEST", "forwarded")
@@ -176,13 +184,23 @@ def test_codex_subcommand_uses_project_runtime_home_auth_and_return_code(
     assert auth_link.samefile(global_auth)
 
 
-def test_codex_subcommand_warns_when_global_auth_is_missing(workspace, monkeypatch):
+@pytest.mark.parametrize("use_auth_override", [True, False], ids=["override", "default"])
+def test_codex_subcommand_warns_when_global_auth_is_missing(
+    workspace, monkeypatch, use_auth_override
+):
     """Default launch warns and continues when no global auth file exists."""
     project, codex_home = workspace
     (project / ".codex").mkdir()
     (project / ".codex" / "codexmgr.toml").write_text("", encoding="utf-8")
-    missing_auth = codex_home / "missing-auth.json"
-    monkeypatch.setenv("CODEX_GLOBAL_AUTH", str(missing_auth))
+    user_home = project.parent / "user-home"
+    monkeypatch.delenv("HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: user_home)
+    if use_auth_override:
+        missing_auth = codex_home / "missing-auth.json"
+        monkeypatch.setenv("CODEX_GLOBAL_AUTH", str(missing_auth))
+    else:
+        missing_auth = user_home / ".codex" / "auth.json"
+        monkeypatch.delenv("CODEX_GLOBAL_AUTH", raising=False)
     captured = {}
 
     def fake_run(command, cwd, env):
@@ -216,6 +234,67 @@ def test_codex_subcommand_warns_when_global_auth_is_missing(workspace, monkeypat
     }
     assert (project / ".codex" / ".runtime").is_dir()
     assert not (project / ".codex" / ".runtime" / "auth.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("has_project_auth", "stdin_is_terminal", "stderr_is_terminal"),
+    [
+        pytest.param(False, True, True, id="interactive"),
+        pytest.param(False, False, True, id="redirected-input"),
+        pytest.param(False, True, False, id="redirected-warning"),
+        pytest.param(True, True, True, id="existing-auth"),
+    ],
+)
+def test_codex_subcommand_continues_when_windows_denies_auth_link(
+    workspace, monkeypatch, has_project_auth, stdin_is_terminal, stderr_is_terminal
+):
+    """The visible warning pauses before launch when acknowledgement is possible."""
+    project, codex_home = workspace
+    runtime_home = project / ".codex" / ".runtime"
+    runtime_home.mkdir(parents=True)
+    (runtime_home.parent / "codexmgr.toml").touch()
+    global_auth = _configure_global_auth(codex_home, monkeypatch)
+    project_auth = runtime_home / "auth.json"
+    if has_project_auth:
+        project_auth.write_text("project auth", encoding="utf-8")
+    stdin = io.StringIO("\n")
+    stderr = io.StringIO()
+    monkeypatch.setattr(stdin, "isatty", lambda: stdin_is_terminal)
+    monkeypatch.setattr(stderr, "isatty", lambda: stderr_is_terminal)
+    should_pause = not has_project_auth and stdin_is_terminal and stderr_is_terminal
+
+    def deny_symlink(self, target):
+        assert target == global_auth
+        denied = OSError("Symlink privilege not held")
+        denied.winerror = 1314
+        raise denied
+
+    def fake_run(command, cwd, env):
+        assert env["CODEX_HOME"] == str(runtime_home)
+        assert stdin.tell() == (1 if should_pause else 0)
+        return SimpleNamespace(returncode=42)
+
+    monkeypatch.setattr(Path, "symlink_to", deny_symlink)
+    monkeypatch.setattr("codexmgr.commands.codex.subprocess.run", fake_run)
+
+    assert main(
+        ["codex", "--help"],
+        cwd=project,
+        codex_home=codex_home,
+        stdin=stdin,
+        stdout=io.StringIO(),
+        stderr=stderr,
+    ) == 42
+    assert not project_auth.is_symlink()
+    if has_project_auth:
+        assert project_auth.read_text(encoding="utf-8") == "project auth"
+        assert stderr.getvalue() == ""
+    else:
+        assert not project_auth.exists()
+        assert "Windows denied permission to link global auth" in stderr.getvalue()
+        assert "enable Developer Mode in Windows Settings" in stderr.getvalue()
+        assert ("Press Enter to continue." in stderr.getvalue()) == should_pause
+    assert list(runtime_home.glob(".auth-*")) == []
 
 
 def test_codex_subcommand_simple_mode_runs_basic_codex(workspace, monkeypatch):
@@ -253,6 +332,7 @@ def test_codex_subcommand_simple_mode_runs_basic_codex(workspace, monkeypatch):
 def test_codex_subcommand_applies_project_config_before_running_codex(
     workspace,
     monkeypatch,
+    stub_auth_link,
 ):
     """codexmgr codex refreshes generated config before starting codex."""
     project, codex_home = workspace
@@ -267,8 +347,6 @@ enabled = ["example"]
 ''',
         encoding="utf-8",
     )
-    _configure_global_auth(codex_home, monkeypatch)
-
     captured = {}
 
     def fake_run(command, cwd, env):
@@ -331,6 +409,7 @@ def test_codex_subcommand_supports_jit_package_profiles(
     workspace,
     monkeypatch,
     run_cli_with_homes,
+    stub_auth_link,
 ):
     """codex can run with an ephemeral package/profile overlay."""
     project, codex_home = workspace
@@ -352,7 +431,6 @@ skills = ["strict-skill"]
 ''',
     )
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
-    _configure_global_auth(codex_home, monkeypatch)
     captured = {}
 
     def fake_run(command, cwd, env):
@@ -421,6 +499,7 @@ def test_codex_jit_overlay_snapshots_and_restores_rules(
     workspace,
     monkeypatch,
     run_cli_with_homes,
+    stub_auth_link,
 ):
     """codex JIT package overlays copy rules temporarily and restore them."""
     project, codex_home = workspace
@@ -428,7 +507,6 @@ def test_codex_jit_overlay_snapshots_and_restores_rules(
     _write_home_rule(codexmgr_home, "react/components.md", "# Components\n")
     _write_package(codexmgr_home, "frontend", 'rules = ["react/"]\n')
     run_cli_with_homes(["setup"], project, codex_home, codexmgr_home)
-    _configure_global_auth(codex_home, monkeypatch)
     captured = {}
 
     def fake_run(command, cwd, env):
@@ -477,6 +555,17 @@ def _write_package(codexmgr_home, name, content):
     path = package_dir / "config.toml"
     path.write_text(content, encoding="utf-8")
     return path
+
+
+@pytest.fixture
+def stub_auth_link(workspace, monkeypatch):
+    """Isolate launch orchestration tests from filesystem symlink permissions."""
+    _, codex_home = workspace
+    _configure_global_auth(codex_home, monkeypatch)
+    monkeypatch.setattr(
+        "codexmgr.commands.codex_launch._replace_auth_link",
+        lambda auth_link, global_auth: None,
+    )
 
 
 def _configure_global_auth(codex_home, monkeypatch):

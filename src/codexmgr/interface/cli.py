@@ -52,7 +52,7 @@ def main(
         codex_home: Optional Codex home used instead of CODEX_HOME or ~/.codex.
         codexmgr_home: Optional codexmgr home used instead of CODEXMGR_HOME
             or ~/.codexmgr.
-        stdin: Optional stream for interactive conflict decisions.
+        stdin: Optional stream for interactive prompts.
         stdout: Optional stream for normal command output.
         stderr: Optional stream for command errors.
 
@@ -124,7 +124,7 @@ def _dispatch(
         cwd: Project directory for project-local operations.
         codex_home: Global Codex home for resolving named skills.
         codexmgr_home: codexmgr home for resolving named AGENTS.md templates.
-        stdin: Stream for interactive conflict decisions.
+        stdin: Stream for interactive prompts.
         stdout: Stream for command output.
         stderr: Stream for command warnings.
 
@@ -173,6 +173,7 @@ def _dispatch(
             codexmgr_home,
             args.codex_args,
             stderr,
+            stdin=stdin,
         )
 
     if args.command == "agentsmd" and args.agentsmd_command == "list":
