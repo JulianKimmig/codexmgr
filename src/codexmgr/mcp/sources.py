@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from ..core.errors import CommandError
@@ -151,10 +151,15 @@ def is_bare_mcp_source_name(name: str) -> bool:
         name: MCP source reference from config or CLI input.
 
     Returns:
-        True when the reference has no path separators or TOML suffix.
+        True when the reference is a nonempty, path-free filename stem.
     """
     raw = name.strip()
-    return bool(raw) and "/" not in raw and "\\" not in raw and not raw.endswith(".toml")
+    return (
+        bool(raw)
+        and not any(character in name for character in ("/", "\\", "\0"))
+        and not PureWindowsPath(name).drive
+        and not raw.endswith(".toml")
+    )
 
 
 def _validate_unique_server_ids(sources: list[McpSource]) -> None:

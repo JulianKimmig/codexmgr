@@ -233,6 +233,13 @@ rules = ["react/"]
         "skills": {"enabled": ["repo-rule-manager"], "disabled": []},
         "hooks": {"enabled": ["repo-rules"], "disabled": []},
         "rules": {"enabled": ["react/"], "disabled": []},
+        "package_selections": {"repo-rules": {"root": {
+            "agentsmd": ["coding"],
+            "agents": ["rule-retriever"],
+            "hooks": ["repo-rules"],
+            "skills": ["repo-rule-manager"],
+            "rules": ["react/"],
+        }}},
     }
 
     staged = load_staged_config(project, codex_home, codexmgr_home)
@@ -325,6 +332,10 @@ skills = ["strict-review"]
             "enabled": ["repo-rule-manager", "strict-review"],
             "disabled": [],
         },
+        "package_selections": {"repo-rules": {
+            "root": {"agentsmd": ["coding"], "skills": ["repo-rule-manager"]},
+            "profiles": {"strict": {"agentsmd": ["strict-coding"], "skills": ["strict-review"]}},
+        }},
     }
 
     staged = load_staged_config(project, codex_home, codexmgr_home)
@@ -337,6 +348,9 @@ skills = ["strict-review"]
             "enabled": ["repo-rule-manager"],
             "disabled": ["strict-review"],
         },
+        "package_selections": {"repo-rules": {
+            "root": {"agentsmd": ["coding"], "skills": ["repo-rule-manager"]},
+        }},
     }
 
 

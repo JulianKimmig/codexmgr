@@ -8,10 +8,9 @@ from typing import Any
 
 from ..core.errors import CommandError
 from ..guides.sources import guide_descendants
-from ..packages.mutation import (
-    apply_package_entries_to_config,
-    selected_entries_for_package,
-)
+from ..packages.config import merge_package_resources
+from ..packages.entries import apply_package_entries
+from ..packages.resolution import PackageResolver
 from ..project.apply import (
     apply_project_config,
     apply_project_state,
@@ -77,14 +76,13 @@ def build_jit_project_state(
         Generated state for the overlaid configuration.
     """
     overlay = deepcopy(base_config)
+    resolver = PackageResolver(codexmgr_home)
     for package_name in request.packages:
-        entries = selected_entries_for_package(
-            package_name,
-            codexmgr_home,
-            request.profiles,
+        entries = merge_package_resources(
+            resolver.section(package_name, profile) for profile in (None, *request.profiles)
         )
-        apply_package_entries_to_config(
-            overlay, entries, codexmgr_home, enabled=True, cwd=cwd, codex_home=codex_home,
+        apply_package_entries(
+            overlay, entries, codexmgr_home, state="enabled", cwd=cwd, codex_home=codex_home,
         )
     return build_project_state_from_config(overlay, cwd, codex_home, codexmgr_home)
 

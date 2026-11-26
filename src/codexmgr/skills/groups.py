@@ -84,14 +84,7 @@ def set_skill_references_state(
         codexmgr_home: Manager source store.
     """
     requested_groups = {ref for ref in references if _is_group(ref)}
-    references = expand_skill_references(references, config, cwd, codex_home, codexmgr_home)
-    available = (
-        available_skill_names(cwd, codex_home, codexmgr_home)
-        if any(is_store_reference(ref) for ref in references) else []
-    )
-    selected: dict[str, str] = {}
-    for reference in references:
-        selected.setdefault(_canonical(reference, available), reference)
+    selected, available = skill_selection_refs(references, config, cwd, codex_home, codexmgr_home)
     references = list(selected.values())
     enabled, disabled = _skill_lists(config)
     enabled = [ref for ref in enabled if ref not in requested_groups]
@@ -129,19 +122,41 @@ def skill_reference_states(
     Returns:
         Enabled, disabled, or available for each distinct selected identity.
     """
+    selected, available = skill_selection_refs(references, config, cwd, codex_home, codexmgr_home)
+    enabled_refs, disabled_refs = _skill_lists(config)
+    enabled = {_canonical(ref, available) for ref in enabled_refs}
+    disabled = {_canonical(ref, available) for ref in disabled_refs}
+    return [
+        "enabled" if ref in enabled else "disabled" if ref in disabled else "available"
+        for ref in selected
+    ]
+
+
+def skill_selection_refs(
+    references: list[str], config: Mapping[str, Any],
+    cwd: Path, codex_home: Path, codexmgr_home: Path,
+) -> tuple[dict[str, str], list[str]]:
+    """Expand groups and identify equivalent skill references.
+
+    Args:
+        references: Skill leaves and trailing-slash groups.
+        config: Project state used to find configured group descendants.
+        cwd: Project root.
+        codex_home: Codex skill store.
+        codexmgr_home: Manager skill store.
+
+    Returns:
+        A mapping from canonical identity to first selected spelling, and the available references.
+    """
     references = expand_skill_references(references, config, cwd, codex_home, codexmgr_home)
     available = (
         available_skill_names(cwd, codex_home, codexmgr_home)
         if any(is_store_reference(ref) for ref in references) else []
     )
-    enabled_refs, disabled_refs = _skill_lists(config)
-    enabled = {_canonical(ref, available) for ref in enabled_refs}
-    disabled = {_canonical(ref, available) for ref in disabled_refs}
-    identities = dict.fromkeys(_canonical(ref, available) for ref in references)
-    return [
-        "enabled" if ref in enabled else "disabled" if ref in disabled else "available"
-        for ref in identities
-    ]
+    selected: dict[str, str] = {}
+    for reference in references:
+        selected.setdefault(_canonical(reference, available), reference)
+    return selected, available
 
 
 def _is_group(reference: str) -> bool:

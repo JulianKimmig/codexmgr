@@ -4,6 +4,18 @@ This file records changes to the codexmgr Python package and CLI. codexmgr uses 
 
 ## Unreleased
 
+## 0.6.0 - 2026-11-26
+
+### Added
+
+- Include other packages with `packages = ["name"]` in a package manifest or profile. CLI and TUI package removal preserve resources shared by other recorded package selections. Re-enable packages already in use to record their selections.
+- Bundle reusable MCP sources with `mcp = ["source-name"]` in package manifests and profiles. The CLI, TUI, and temporary Codex launches load those sources with the rest of the package.
+
+### Fixed
+
+- `codexmgr codex` continues with project-local authentication if the OS cannot create the global auth symlink, including on Windows mapped network drives. Sign in for the project if Codex prompts you.
+- Repeated applies keep the existing spacing around generated MCP server tables that remain configured.
+
 ## 0.5.3 - 2026-11-26
 
 ### Fixed

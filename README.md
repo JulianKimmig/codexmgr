@@ -179,8 +179,9 @@ scope and implementation map.
 
 `.codex/codexmgr.toml` can opt into each resource type independently. A minimal
 file may only contain `[agents_md]`; larger projects can add skills, custom
-agents, hooks, reusable rules, and MCP sources or overlays as needed. Package commands
-write those same tables rather than a separate package table.
+agents, hooks, reusable rules, and MCP sources or overlays as needed. Package
+commands update the resource tables and record explicit selections in
+`[package_selections]`.
 
 ```toml
 [agents_md]
@@ -352,7 +353,8 @@ and records managed ownership in the same apply. Neither choice is automatic.
 
 ## Packages
 
-Packages are reusable bundles of snippets, agents, hooks, skills, rules, and guides.
+Packages bundle reusable snippets, agents, hooks, skills, rules, guides, and MCP
+sources.
 They resolve from `$CODEXMGR_HOME/packages/<name>/config.toml`.
 
 A package config is a TOML document with root lists and optional profile tables:
@@ -364,6 +366,7 @@ hooks = ["repo-rules"]
 skills = ["repo-rule-manager"]
 rules = ["react/"]
 guides = ["games/general/"]
+mcp = ["browsermcp"]
 [profiles.strict]
 agentsmd = ["strict-coding"]
 agents = ["strict-agent"]
@@ -371,10 +374,33 @@ hooks = ["strict-rules"]
 skills = ["strict-review"]
 rules = ["python/testing.md"]
 guides = ["games/advanced/performance.md"]
+mcp = ["context7"]
 ```
 
 The `agents` list enables custom agents from
 `$CODEXMGR_HOME/agents/<name>.toml`.
+
+Use `packages` to include other packages by name. A `programming` package
+can include `changelog` at the root and add `python-checks` when the Python
+profile is selected.
+
+```toml
+packages = ["changelog"]
+
+[profiles.python]
+packages = ["python-checks"]
+```
+
+Each include contributes the included package's root entries and follows its
+own includes recursively. A section's entries come first, followed by its
+includes in declaration order. Repeated resources are applied once. Select
+profiles explicitly to apply their entries and includes.
+
+The `mcp` list takes reusable source names from
+`$CODEXMGR_HOME/mcp/<name>.toml`. Enabling a package adds its sources to
+`[mcp].enabled`. Set project-specific server settings in
+`[mcp.servers.<id>]` in `.codex/codexmgr.toml`. Temporary package launches
+also load the selected sources for the session.
 
 The `skills` list accepts individual skills and store-relative folder groups
 ending in `/`, in both the root package and profiles. For example, a Phaser
@@ -404,9 +430,11 @@ snapshotting, so unrelated links cannot be changed by restoration.
 `.codex/codexmgr.toml` as if the corresponding resource commands had been run.
 
 `codexmgr package disable <name>` removes package `AGENTS.md` entries when
-present and disables the package skills, hooks, agents, rules, and guides. Package state
-is not tracked separately; the resulting project config tables remain the
-source of truth.
+present and disables any unshared package skills, hooks, agents, rules, guides,
+and MCP sources. Resources also used by another explicitly enabled package
+or profile stay active. Re-enable packages already in use to record their
+selections for shared-resource protection. Re-enabling records added resources,
+and disabling uses the recorded contributions even if a manifest has changed.
 
 Profiles are merged with the root package entries:
 
@@ -670,11 +698,13 @@ The wrapper links the global authentication file into
 non-empty and otherwise uses `.codex/auth.json` under `HOME` or the platform's
 default user home when `HOME` is unset or empty. A missing auth source
 produces a warning but does not stop Codex, which can then authenticate within
-the project runtime home. If Windows denies permission to create the auth link,
-the wrapper continues with project-local authentication. Sign in for the
-project if Codex prompts you, or enable Developer Mode in Windows Settings to
-allow symlinks. In an interactive terminal, the warning waits for Enter before
-Codex opens.
+the project runtime home. If the OS cannot create the symlink, the wrapper
+continues and preserves any existing project auth. It reports the OS reason
+for unexpected failures. For known Windows permission errors, it warns if
+project auth is missing. Sign in for the project if Codex prompts you.
+When the warning identifies a missing symlink privilege, Windows Developer Mode
+can allow symlink creation. In an interactive terminal, the warning waits for
+Enter before Codex opens if project auth is missing.
 
 Use `--simple` immediately after `codex` to run the basic command without
 applying project state, changing the child `CODEX_HOME`, or managing an auth

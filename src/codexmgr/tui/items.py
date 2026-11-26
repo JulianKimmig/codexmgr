@@ -131,25 +131,21 @@ def package_items(staged: StagedConfig) -> list[ManagedItem]:
     for name in available_package_names(staged.codexmgr_home):
         try:
             package = load_package_config(name, staged.codexmgr_home)
-            items.append(
-                ManagedItem(
-                    name,
-                    staged.package_state(name),
-                    detail="package",
-                    value=package_value(name),
-                ),
-            )
-            for profile in sorted(package.profiles):
-                items.append(
-                    ManagedItem(
-                        f"{name} / {profile}",
-                        staged.package_profile_state(name, profile),
-                        detail="profile",
-                        value=package_profile_value(name, profile),
-                    ),
-                )
         except CommandError as exc:
             items.append(ManagedItem(name, "error", True, str(exc), package_value(name)))
+            continue
+        for profile in (None, *sorted(package.profiles)):
+            label = name if profile is None else f"{name} / {profile}"
+            value = package_value(name) if profile is None else package_profile_value(name, profile)
+            try:
+                state = (
+                    staged.package_state(name) if profile is None
+                    else staged.package_profile_state(name, profile)
+                )
+                detail = "package" if profile is None else "profile"
+                items.append(ManagedItem(label, state, detail=detail, value=value))
+            except CommandError as exc:
+                items.append(ManagedItem(label, "error", True, str(exc), value))
     return items
 
 
