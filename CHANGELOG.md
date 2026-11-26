@@ -4,6 +4,10 @@ This file records changes to the codexmgr Python package and CLI. codexmgr uses 
 
 ## Unreleased
 
+### Fixed
+
+- `codexmgr codex` continues with project-local authentication if the OS cannot create the global auth symlink, including on Windows mapped network drives. Sign in for the project if Codex prompts you.
+
 ## 0.5.3 - 2026-11-26
 
 ### Fixed

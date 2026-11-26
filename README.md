@@ -670,11 +670,13 @@ The wrapper links the global authentication file into
 non-empty and otherwise uses `.codex/auth.json` under `HOME` or the platform's
 default user home when `HOME` is unset or empty. A missing auth source
 produces a warning but does not stop Codex, which can then authenticate within
-the project runtime home. If Windows denies permission to create the auth link,
-the wrapper continues with project-local authentication. Sign in for the
-project if Codex prompts you, or enable Developer Mode in Windows Settings to
-allow symlinks. In an interactive terminal, the warning waits for Enter before
-Codex opens.
+the project runtime home. If the OS cannot create the symlink, the wrapper
+continues and preserves any existing project auth. It reports the OS reason
+for unexpected failures. For known Windows permission errors, it warns if
+project auth is missing. Sign in for the project if Codex prompts you.
+When the warning identifies a missing symlink privilege, Windows Developer Mode
+can allow symlink creation. In an interactive terminal, the warning waits for
+Enter before Codex opens if project auth is missing.
 
 Use `--simple` immediately after `codex` to run the basic command without
 applying project state, changing the child `CODEX_HOME`, or managing an auth
