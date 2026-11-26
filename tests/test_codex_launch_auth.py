@@ -1,7 +1,7 @@
 """Verify managed Codex launch when the global auth symlink cannot be created."""
 
 import errno
-import os
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -90,18 +90,26 @@ def test_windows_access_denied_creating_staging_directory_raises(
     """A denial writing the runtime directory remains an error."""
     project, codex_home = configured_launch
     runtime_home = project / ".codex" / ".runtime"
-    mkdir = os.mkdir
+    mkdtemp = tempfile.mkdtemp
 
-    def deny_staging_directory(path, *args, **kwargs):
-        """Report access denied for a new auth staging directory."""
-        directory = Path(path)
-        if directory.parent == runtime_home and directory.name.startswith(".auth-"):
+    def deny_staging_directory(suffix=None, prefix=None, dir=None):
+        """Report access denied when creating an auth staging directory.
+
+        Args:
+            suffix: Optional suffix for the temporary directory name.
+            prefix: Optional prefix for the temporary directory name.
+            dir: Optional parent directory for the temporary directory.
+        Returns:
+            The created path for temporary directories outside auth staging.
+        """
+        if dir == runtime_home and prefix == ".auth-":
             denied = PermissionError(errno.EACCES, "Cannot create staging directory")
             denied.winerror = 5
             raise denied
-        return mkdir(path, *args, **kwargs)
+        return mkdtemp(suffix, prefix, dir)
 
-    monkeypatch.setattr(os, "mkdir", deny_staging_directory)
+    # Older Windows Python versions retry PermissionError from mkdir in mkdtemp.
+    monkeypatch.setattr(tempfile, "mkdtemp", deny_staging_directory)
 
     with pytest.raises(PermissionError, match="Cannot create staging directory"):
         run_cli(["codex", "--version"], project, codex_home)
