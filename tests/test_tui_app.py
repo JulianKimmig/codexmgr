@@ -161,6 +161,9 @@ skills = ["strict-review"]
     assert read_project_config(project) == {
         "agents_md": {"src": ["strict-coding"]},
         "skills": {"enabled": ["strict-review"], "disabled": []},
+        "package_selections": {"repo-rules": {
+            "profiles": {"strict": {"agentsmd": ["strict-coding"], "skills": ["strict-review"]}},
+        }},
     }
 
 
